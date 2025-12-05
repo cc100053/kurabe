@@ -5,7 +5,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../services/location_service.dart';
 import '../services/supabase_service.dart';
-import '../widgets/shopping_card.dart';
+import '../widgets/community_product_tile.dart';
 
 enum _CategoryView { mine, community }
 
@@ -149,12 +149,12 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                 ButtonSegment(
                   value: _CategoryView.mine,
                   icon: Icon(Icons.person),
-                  label: Text('我的紀錄'),
+                  label: Text('自分の記録'),
                 ),
                 ButtonSegment(
                   value: _CategoryView.community,
                   icon: Icon(Icons.public),
-                  label: Text('附近情報'),
+                  label: Text('近くの情報'),
                 ),
               ],
               selected: {_selectedView},
@@ -208,7 +208,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
+          return Center(child: Text('エラー: ${snapshot.error}'));
         }
         final records = snapshot.data ?? [];
         if (records.isEmpty) {
@@ -219,7 +219,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           padding: const EdgeInsets.all(12),
           itemCount: records.length,
           itemBuilder: (context, index) {
-            return ShoppingCard(record: records[index]);
+            return CommunityProductTile(record: records[index]);
           },
         );
       },
@@ -275,7 +275,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
+            return Center(child: Text('エラー: ${snapshot.error}'));
           }
           final records = snapshot.data ?? [];
           if (records.isEmpty) {
@@ -295,7 +295,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
               final isCheapest = unitPrice != null &&
                   minForName != null &&
                   (unitPrice - minForName).abs() < 1e-6;
-              return ShoppingCard(
+              return CommunityProductTile(
                 record: record,
                 isCheapestOverride: isCheapest,
               );

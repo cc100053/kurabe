@@ -111,14 +111,14 @@ class _AddEditScreenState extends State<AddEditScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.camera_alt),
-                title: const Text('Take Photo'),
-                subtitle: const Text('Use the smart guide overlay'),
+                title: const Text('写真を撮る'),
+                subtitle: const Text('スマートガイドを使用'),
                 onTap: () =>
                     Navigator.pop(context, _ImageAcquisitionOption.smartCamera),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library),
-                title: const Text('Upload from Gallery'),
+                title: const Text('ギャラリーから選択'),
                 onTap: () =>
                     Navigator.pop(context, _ImageAcquisitionOption.gallery),
               ),
@@ -151,7 +151,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to process image: $e')));
+      ).showSnackBar(SnackBar(content: Text('画像の処理に失敗しました: $e')));
     }
   }
 
@@ -237,7 +237,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
       debugPrintStack(stackTrace: stack);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('AI could not read the tag')),
+          const SnackBar(content: Text('AIがタグを読み取れませんでした')),
         );
       }
     } finally {
@@ -469,7 +469,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'No shop suggestions yet. Tap the location icon or type manually.',
+            '店舗の候補がありません。位置情報アイコンをタップするか、手動で入力してください。',
           ),
         ),
       );
@@ -490,7 +490,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
                 children: [
                   const ListTile(
                     title: Text(
-                      'Select Shop',
+                      '店舗を選択',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -505,7 +505,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
                   const Divider(),
                   ListTile(
                     leading: const Icon(Icons.edit),
-                    title: const Text('Manual Input'),
+                    title: const Text('手動入力'),
                     onTap: () => Navigator.pop(context, _manualInputSentinel),
                   ),
                 ],
@@ -618,7 +618,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
           children: [
             if (_finalTaxedTotal != null) ...[
               const Text(
-                'Final Total (税込)',
+                '最終合計（税込）',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               Text(
@@ -632,7 +632,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
             ],
             if (_unitPrice != null)
               Text(
-                '@ ¥${_unitPrice!.toStringAsFixed(0)} / each',
+                '@ ¥${_unitPrice!.toStringAsFixed(0)} / 個',
                 style: const TextStyle(color: Colors.black54),
               ),
           ],
@@ -647,27 +647,27 @@ class _AddEditScreenState extends State<AddEditScreen> {
     String text;
     if (_insightState == _InsightState.loading) {
       bg = Colors.grey.shade200;
-      text = 'Checking community prices...';
+      text = 'コミュニティ価格を確認中...';
     } else if (_insightState == _InsightState.none) {
       bg = Colors.grey.shade200;
-      text = 'No recent data nearby. Be the first to record!';
+      text = '近くに最近のデータがありません。最初の記録者になりましょう！';
     } else if (_insightState == _InsightState.best) {
       bg = Colors.amber.shade200;
-      text = 'You found the best price nearby!';
+      text = '付近で最安値を見つけました！';
       if (_insightPrice != null && _insightShop != null) {
         text =
-            'You found the best price nearby! (¥${_insightPrice!.round()} at $_insightShop)';
+            '付近で最安値を見つけました！(¥${_insightPrice!.round()} at $_insightShop)';
       }
     } else {
       bg = Colors.green.shade200;
       final priceText = _insightPrice != null
           ? '¥${_insightPrice!.round()}'
-          : 'Cheaper price';
-      final shopText = _insightShop ?? 'nearby shop';
+          : 'より安い価格';
+      final shopText = _insightShop ?? '近くの店舗';
       final distanceText = _insightDistanceMeters != null
           ? ' (${_formatDistance(_insightDistanceMeters!)})'
           : '';
-      text = 'Found cheaper! $priceText at $shopText$distanceText';
+      text = 'より安い価格を発見！$priceText at $shopText$distanceText';
     }
     return Card(
       color: bg,
@@ -686,9 +686,9 @@ class _AddEditScreenState extends State<AddEditScreen> {
 
   String _formatDistance(double meters) {
     if (meters >= 1000) {
-      return '${(meters / 1000).toStringAsFixed(1)} km away';
+      return '${(meters / 1000).toStringAsFixed(1)} km 先';
     }
-    return '${meters.toStringAsFixed(0)} m away';
+    return '${meters.toStringAsFixed(0)} m 先';
   }
 
   List<GooglePlace> _prioritizeShops(List<GooglePlace> shops) {
@@ -709,7 +709,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Missing Google Places API key. Set GOOGLE_PLACES_API_KEY in .env.',
+              'Google Places APIキーがありません。.envにGOOGLE_PLACES_API_KEYを設定してください。',
             ),
           ),
         );
@@ -730,7 +730,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
       });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('No shops found nearby.')));
+      ).showSnackBar(const SnackBar(content: Text('近くに店舗が見つかりませんでした。')));
       return;
     }
     final sorted = _prioritizeShops(cached);
@@ -743,7 +743,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Selected nearest shop: ${_nearbyShops.first.name}'),
+        content: Text('最寄りの店舗を選択しました: ${_nearbyShops.first.name}'),
       ),
     );
   }
@@ -762,7 +762,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
               children: [
                 CircularProgressIndicator(),
                 SizedBox(height: 12),
-                Text('Saving...'),
+                Text('保存中...'),
               ],
             ),
           ),
@@ -796,7 +796,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
         finalTaxedTotal == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Product, shop, and original price are required.'),
+          content: Text('商品名、店舗名、元の価格は必須です。'),
         ),
       );
       return;
@@ -835,15 +835,15 @@ class _AddEditScreenState extends State<AddEditScreen> {
       if (!mounted) return;
       _hideSavingDialog();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Record saved to Supabase.')),
+        const SnackBar(content: Text('記録を保存しました。')),
       );
-      Navigator.pop(context, 'Record saved to Supabase.');
+      Navigator.pop(context, '記録を保存しました。');
     } catch (e) {
       if (!mounted) return;
       _hideSavingDialog();
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to save record: $e')));
+      ).showSnackBar(SnackBar(content: Text('記録の保存に失敗しました: $e')));
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -854,7 +854,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Record')),
+      appBar: AppBar(title: const Text('記録を追加')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -885,7 +885,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
                                     ),
                                     SizedBox(height: 12),
                                     Text(
-                                      'Tap to scan',
+                                      'タップしてスキャン',
                                       style: TextStyle(
                                         fontSize: 16,
                                         color: Colors.black54,
@@ -917,7 +917,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _productController,
-              decoration: const InputDecoration(labelText: 'Product name'),
+              decoration: const InputDecoration(labelText: '商品名'),
             ),
             if (_suggestionChips.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -944,8 +944,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
             TextField(
               controller: _originalPriceController,
               decoration: const InputDecoration(
-                labelText: 'Original price (tag)',
-                helperText: 'Enter the price printed before any discounts',
+                labelText: '元の価格（値札）',
+                helperText: '割引前の印刷された価格を入力',
               ),
               keyboardType: TextInputType.number,
               onChanged: (_) => _calculateFinalPrice(),
@@ -957,8 +957,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
                   child: TextField(
                     controller: _quantityController,
                     decoration: const InputDecoration(
-                      labelText: 'Quantity in deal',
-                      hintText: 'e.g., 3 for bundles',
+                      labelText: 'セット数量',
+                      hintText: '例: 3個セットの場合は3',
                     ),
                     keyboardType: TextInputType.number,
                     onChanged: (_) => _calculateFinalPrice(),
@@ -972,15 +972,15 @@ class _AddEditScreenState extends State<AddEditScreen> {
                     items: const [
                       DropdownMenuItem(
                         value: 'standard',
-                        child: Text('Standard'),
+                        child: Text('通常'),
                       ),
                       DropdownMenuItem(
                         value: 'promo',
-                        child: Text('Promo'),
+                        child: Text('特価'),
                       ),
                       DropdownMenuItem(
                         value: 'clearance',
-                        child: Text('Clearance'),
+                        child: Text('見切り'),
                       ),
                     ],
                     onChanged: (value) {
@@ -988,7 +988,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
                         setState(() => _priceType = value);
                       }
                     },
-                    decoration: const InputDecoration(labelText: 'Price type'),
+                    decoration: const InputDecoration(labelText: '価格タイプ'),
                   ),
                 ),
               ],
@@ -998,7 +998,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Discount',
+                  '割引',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
@@ -1024,22 +1024,22 @@ class _AddEditScreenState extends State<AddEditScreen> {
                   children: const [
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('None'),
+                      child: Text('なし'),
                     ),
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('% Off'),
+                      child: Text('% 引き'),
                     ),
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('¥ Off'),
+                      child: Text('¥ 引き'),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _discountValueController,
-                  decoration: const InputDecoration(labelText: 'Discount value'),
+                  decoration: const InputDecoration(labelText: '割引額'),
                   enabled: _selectedDiscountType != _DiscountType.none,
                   keyboardType: TextInputType.number,
                   onChanged: (_) => _calculateFinalPrice(),
@@ -1071,7 +1071,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
                     focusNode: _shopFocusNode,
                     onChanged: (_) => _clearSelectedShopCoordinates(),
                     decoration: InputDecoration(
-                      labelText: 'Shop name',
+                      labelText: '店舗名',
                       suffixIcon: _isFetchingShops
                           ? const Padding(
                               padding: EdgeInsets.all(12),
@@ -1085,7 +1085,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
                             )
                           : IconButton(
                               icon: const Icon(Icons.store_mall_directory),
-                              tooltip: 'Select nearby shop',
+                              tooltip: '近くの店舗を選択',
                               onPressed: _showShopSelectionSheet,
                             ),
                     ),
@@ -1094,7 +1094,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
                 IconButton(
                   onPressed: _isFetchingShops ? null : _fetchLocation,
                   icon: const Icon(Icons.my_location),
-                  tooltip: 'Auto-fill from Google Places',
+                  tooltip: 'Google Placesから自動入力',
                 ),
               ],
             ),
@@ -1105,7 +1105,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
                 onPressed: _isSaving ? null : _save,
                 child: _isSaving
                     ? const CircularProgressIndicator()
-                    : const Text('Save'),
+                    : const Text('保存'),
               ),
             ),
           ],

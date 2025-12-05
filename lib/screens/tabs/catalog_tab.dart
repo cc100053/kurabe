@@ -7,7 +7,7 @@ import '../../screens/tabs/profile_tab.dart';
 import '../../constants/categories.dart';
 import '../../screens/category_detail_screen.dart';
 import '../../services/supabase_service.dart';
-import '../../widgets/shopping_card.dart';
+import '../../widgets/community_product_tile.dart';
 
 class CatalogTab extends StatefulWidget {
   const CatalogTab({super.key});
@@ -119,7 +119,7 @@ class _CatalogTabState extends State<CatalogTab> {
               controller: _searchController,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search),
-                hintText: 'Search for products...',
+                hintText: '商品を検索...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -144,7 +144,7 @@ class _CatalogTabState extends State<CatalogTab> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Community Search is for registered users only.',
+                'コミュニティ検索は登録ユーザーのみ利用できます。',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
@@ -155,7 +155,7 @@ class _CatalogTabState extends State<CatalogTab> {
                     context,
                   ).push(MaterialPageRoute(builder: (_) => const ProfileTab()));
                 },
-                child: const Text('Sign Up'),
+                child: const Text('新規登録'),
               ),
             ],
           ),
@@ -166,13 +166,13 @@ class _CatalogTabState extends State<CatalogTab> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_searchResults.isEmpty) {
-      return const Center(child: Text('No results'));
+      return const Center(child: Text('結果が見つかりませんでした'));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),
       itemCount: _searchResults.length,
       itemBuilder: (context, index) {
-        return ShoppingCard(record: _searchResults[index]);
+        return CommunityProductTile(record: _searchResults[index]);
       },
     );
   }

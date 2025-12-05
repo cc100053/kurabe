@@ -4,7 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
-import 'package:timeago/timeago.dart' as timeago;
+
 
 import '../services/location_service.dart';
 import '../services/supabase_service.dart';
@@ -104,6 +104,8 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         productName: productName,
         lat: position.latitude,
         lng: position.longitude,
+        radiusMeters: 5000, // Match list view radius
+        recentDays: 7, // Cover "5 days ago" items safely
       );
       debugPrint(
         '⏱️ [Insight] API Response received: ${stopwatch.elapsedMilliseconds}ms',
@@ -222,7 +224,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   Widget _buildYourRecordCard(double? userPrice) {
     final shopName = widget.record['shop_name'] as String? ?? '店舗不明';
     final createdAt = _parseDate(widget.record['created_at']);
-    final relative = createdAt != null ? timeago.format(createdAt) : '';
+    final relative = createdAt != null ? _formatTimeAgo(createdAt) : '';
     final priceText = userPrice != null ? _priceFormat.format(userPrice) : '--';
 
     return Container(
@@ -343,10 +345,13 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
     final communityQuantity =
         (community['quantity'] as num?)?.toDouble() ?? 1;
     final communityUnitPrice =
+        (community['unit_price'] as num?)?.toDouble() ??
         _computeUnitPrice(communityPrice, communityQuantity);
-    
+
     final userQuantity = (widget.record['quantity'] as num?)?.toDouble() ?? 1;
     final userUnitPrice = _computeUnitPrice(userPrice, userQuantity);
+    final communityId = community['id'];
+    final userId = widget.record['id'];
 
     final communityShop = community['shop_name'] as String?;
     final communityDistance = (community['distance_meters'] as num?)
@@ -354,17 +359,21 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
     final communityDate = _parseDate(community['created_at']);
 
     // Compare Unit Prices for accurate "Best Price" logic
+    final sameRecord = communityId != null &&
+        userId != null &&
+        communityId.toString() == userId.toString();
     final foundCheaper =
         communityUnitPrice != null &&
         userUnitPrice != null &&
-        communityUnitPrice < userUnitPrice;
+        !sameRecord &&
+        communityUnitPrice + 1e-6 < userUnitPrice;
 
     if (foundCheaper) {
       final subtitleParts = <String>[];
       final distanceText = _formatDistance(communityDistance);
       if (distanceText.isNotEmpty) subtitleParts.add(distanceText);
       final relative = communityDate != null
-          ? timeago.format(communityDate)
+          ? _formatTimeAgo(communityDate)
           : null;
       if (relative != null) subtitleParts.add('$relativeに報告');
 
@@ -474,6 +483,23 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         ],
       ),
     );
+  }
+
+  String _formatTimeAgo(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inMinutes < 1) {
+      return 'たった今';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}分前';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}時間前';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}日前';
+    } else {
+      return DateFormat('MM/dd').format(date);
+    }
   }
 
   String _formatDistance(double? meters) {

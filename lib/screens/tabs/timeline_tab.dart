@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../widgets/shopping_card.dart';
+import '../../widgets/community_product_tile.dart';
 
 class TimelineTab extends StatelessWidget {
   const TimelineTab({super.key});
@@ -33,7 +33,7 @@ class TimelineTab extends StatelessWidget {
                       ),
                     );
                   }
-                  return Center(child: Text('Error: ${snapshot.error}'));
+                  return Center(child: Text('エラー: ${snapshot.error}'));
                 }
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
@@ -47,7 +47,7 @@ class TimelineTab extends StatelessWidget {
                   itemCount: records.length,
                   itemBuilder: (context, index) {
                     final record = records[index];
-                    return ShoppingCard(record: record);
+                    return CommunityProductTile(record: record);
                   },
                 );
               },

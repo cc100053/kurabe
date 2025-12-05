@@ -21,19 +21,19 @@ class _ProfileTabState extends State<ProfileTab> {
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
     final isGuest = _supabaseService.isGuest;
-    final emailText = user?.email ?? 'Guest User';
+    final emailText = user?.email ?? 'ゲストユーザー';
     final userId = user?.id ?? 'N/A';
     final status = _statusMessage;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+      appBar: AppBar(title: const Text('プロフィール')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              isGuest ? 'Guest User' : 'Logged in as',
+              isGuest ? 'ゲストユーザー' : 'ログイン中',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
             if (!isGuest)
@@ -43,7 +43,7 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text('User ID: $userId'),
+              child: Text('ユーザーID: $userId'),
             ),
             if (isGuest)
               const Padding(
@@ -100,7 +100,7 @@ class _ProfileTabState extends State<ProfileTab> {
               ElevatedButton.icon(
                 onPressed: _isLoading ? null : _handleSignOut,
                 icon: const Icon(Icons.logout),
-                label: const Text('Log Out'),
+                label: const Text('ログアウト'),
               ),
             ],
             if (status != null) ...[
