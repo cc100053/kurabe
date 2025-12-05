@@ -145,14 +145,14 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                 _buildHeader(productName, imageUrl),
                 const SizedBox(height: 16),
                 const Text(
-                  'Your Record',
+                  'あなたの記録',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
                 _buildYourRecordCard(userPrice),
                 const SizedBox(height: 16),
                 const Text(
-                  'Community Insight',
+                  'コミュニティ情報',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
@@ -204,12 +204,12 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
               const SizedBox(height: 4),
               if (_currentPosition != null)
                 Text(
-                  'Your location locked',
+                  '現在地を取得しました',
                   style: TextStyle(color: Colors.grey.shade600),
                 ),
               if (_currentPosition == null)
                 Text(
-                  'Finding nearby prices...',
+                  '近くの価格を検索中...',
                   style: TextStyle(color: Colors.grey.shade600),
                 ),
             ],
@@ -280,12 +280,12 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '📍 Location unavailable',
+              '📍 位置情報が取得できません',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 6),
             Text(
-              'Tap to retry with higher accuracy.',
+              'タップして高精度で再試行します。',
               style: TextStyle(color: Colors.grey.shade700),
             ),
             const SizedBox(height: 10),
@@ -300,7 +300,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.my_location),
-              label: Text(_isLoading ? 'Retrying...' : 'Retry high accuracy'),
+              label: Text(_isLoading ? '再試行中...' : '高精度で再試行'),
             ),
           ],
         ),
@@ -321,7 +321,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
             const Expanded(child: LinearProgressIndicator(minHeight: 6)),
             const SizedBox(width: 12),
             Text(
-              'Checking nearby prices...',
+              '近くの価格を確認中...',
               style: TextStyle(color: Colors.grey.shade700),
             ),
           ],
@@ -334,21 +334,30 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
       return _insightContainer(
         color: Colors.grey.shade200,
         borderColor: Colors.grey.shade300,
-        title: 'No recent community data nearby.',
+        title: '近くに最近のデータがありません。',
         icon: Icons.info_outline,
       );
     }
 
     final communityPrice = (community['price'] as num?)?.toDouble();
+    final communityQuantity =
+        (community['quantity'] as num?)?.toDouble() ?? 1;
+    final communityUnitPrice =
+        _computeUnitPrice(communityPrice, communityQuantity);
+    
+    final userQuantity = (widget.record['quantity'] as num?)?.toDouble() ?? 1;
+    final userUnitPrice = _computeUnitPrice(userPrice, userQuantity);
+
     final communityShop = community['shop_name'] as String?;
     final communityDistance = (community['distance_meters'] as num?)
         ?.toDouble();
     final communityDate = _parseDate(community['created_at']);
 
+    // Compare Unit Prices for accurate "Best Price" logic
     final foundCheaper =
-        communityPrice != null &&
-        userPrice != null &&
-        communityPrice < userPrice;
+        communityUnitPrice != null &&
+        userUnitPrice != null &&
+        communityUnitPrice < userUnitPrice;
 
     if (foundCheaper) {
       final subtitleParts = <String>[];
@@ -357,13 +366,16 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
       final relative = communityDate != null
           ? timeago.format(communityDate)
           : null;
-      if (relative != null) subtitleParts.add('Reported $relative');
+      if (relative != null) subtitleParts.add('$relativeに報告');
+
+      final unit = community['unit'] as String? ?? '';
+      final unitLabel = unit.isNotEmpty ? '/$unit' : '';
 
       return _insightContainer(
         color: Colors.green.shade50,
         borderColor: Colors.green.shade200,
         title:
-            'Found Cheaper! ${_priceFormat.format(communityPrice)}${communityShop != null ? ' at $communityShop' : ''}',
+            'より安い価格を発見！ ${_priceFormat.format(communityPrice)}${unitLabel.isNotEmpty ? unitLabel : ""} ($communityShop)',
         icon: Icons.trending_down,
         subtitle: subtitleParts.isNotEmpty ? subtitleParts.join(' • ') : null,
       );
@@ -372,9 +384,9 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
     return _insightContainer(
       color: Colors.amber.shade50,
       borderColor: Colors.amber.shade200,
-      title: 'You have the best price!',
+      title: 'あなたが最安値です！',
       icon: Icons.emoji_events,
-      subtitle: 'No lower prices found nearby.',
+      subtitle: '近くにより安い価格は見つかりませんでした。',
     );
   }
 
@@ -395,14 +407,14 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
               Icon(Icons.lock_outline),
               SizedBox(width: 8),
               Text(
-                'Unlock Nearby Prices',
+                '近くの価格を解除',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            'Sign up to see where to buy cheaper.',
+            'サインアップしてどこでもっと安く購入できるか確認。',
             style: TextStyle(color: Colors.grey.shade700),
           ),
           const SizedBox(height: 10),
@@ -412,7 +424,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                 context,
               ).push(MaterialPageRoute(builder: (_) => const ProfileTab()));
             },
-            child: const Text('Link Account'),
+            child: const Text('アカウントを連携'),
           ),
         ],
       ),
@@ -474,5 +486,11 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
     if (raw is DateTime) return raw.toLocal();
     if (raw is String) return DateTime.tryParse(raw)?.toLocal();
     return null;
+  }
+
+  double? _computeUnitPrice(double? price, double quantity) {
+    if (price == null) return null;
+    final safeQty = quantity <= 0 ? 1 : quantity;
+    return price / safeQty;
   }
 }
