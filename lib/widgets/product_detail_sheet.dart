@@ -146,11 +146,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
               children: [
                 _buildHeader(productName, imageUrl),
                 const SizedBox(height: 16),
-                const Text(
-                  'あなたの記録',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
+
                 _buildYourRecordCard(userPrice),
                 const SizedBox(height: 16),
                 const Text(

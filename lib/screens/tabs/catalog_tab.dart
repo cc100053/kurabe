@@ -168,11 +168,23 @@ class _CatalogTabState extends State<CatalogTab> {
     if (_searchResults.isEmpty) {
       return const Center(child: Text('結果が見つかりませんでした'));
     }
+    final minUnitPriceByName = _findMinUnitPriceByName(_searchResults);
     return ListView.builder(
       padding: const EdgeInsets.all(12),
       itemCount: _searchResults.length,
       itemBuilder: (context, index) {
-        return CommunityProductTile(record: _searchResults[index]);
+        final record = _searchResults[index];
+        final unitPrice = _computeUnitPrice(record);
+        final name =
+            (record['product_name'] as String?)?.trim().toLowerCase() ?? '';
+        final minForName = minUnitPriceByName[name];
+        final isCheapest = unitPrice != null &&
+            minForName != null &&
+            (unitPrice - minForName).abs() < 1e-6;
+        return CommunityProductTile(
+          record: record,
+          isCheapestOverride: isCheapest,
+        );
       },
     );
   }
@@ -248,5 +260,32 @@ class _CatalogTabState extends State<CatalogTab> {
       default:
         return Icons.category;
     }
+  }
+
+  double? _computeUnitPrice(Map<String, dynamic> record) {
+    final explicit = (record['unit_price'] as num?)?.toDouble();
+    if (explicit != null) return explicit;
+    final price = (record['price'] as num?)?.toDouble();
+    final quantity = (record['quantity'] as num?)?.toDouble() ?? 1;
+    if (price == null) return null;
+    return price / (quantity <= 0 ? 1 : quantity);
+  }
+
+  Map<String, double> _findMinUnitPriceByName(
+    List<Map<String, dynamic>> records,
+  ) {
+    final map = <String, double>{};
+    for (final record in records) {
+      final unitPrice = _computeUnitPrice(record);
+      if (unitPrice == null) continue;
+      final name =
+          (record['product_name'] as String?)?.trim().toLowerCase() ?? '';
+      if (name.isEmpty) continue;
+      final current = map[name];
+      if (current == null || unitPrice < current) {
+        map[name] = unitPrice;
+      }
+    }
+    return map;
   }
 }

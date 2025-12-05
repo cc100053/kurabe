@@ -176,16 +176,17 @@ class SupabaseService {
             'user_lng': lng,
             'limit_results': limit,
           },
-        );
-        if (result is List && result.isNotEmpty) {
-          return result
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-        }
-      } catch (_) {
-        // Fall back below.
+      );
+      if (result is List && result.isNotEmpty) {
+        final items = result
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        return _groupCommunityResults(items);
       }
+    } catch (_) {
+      // Fall back below.
+    }
     }
 
     // Fallback: simple query without location.
@@ -196,10 +197,11 @@ class SupabaseService {
           .ilike('product_name', '%$trimmed%')
           .order('price', ascending: true)
           .limit(limit);
-      return result
+      final items = result
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
+      return _groupCommunityResults(items);
     } catch (_) {
       return [];
     }
@@ -267,5 +269,74 @@ class SupabaseService {
     } catch (_) {
       return [];
     }
+  }
+
+  List<Map<String, dynamic>> _groupCommunityResults(
+    List<Map<String, dynamic>> records,
+  ) {
+    Map<String, dynamic>? _pickLatest(
+      Map<String, dynamic>? a,
+      Map<String, dynamic> b,
+    ) {
+      if (a == null) return b;
+      final aDate = DateTime.tryParse(a['created_at']?.toString() ?? '');
+      final bDate = DateTime.tryParse(b['created_at']?.toString() ?? '');
+      if (aDate == null && bDate == null) return b;
+      if (aDate == null) return b;
+      if (bDate == null) return a;
+      return bDate.isAfter(aDate) ? b : a;
+    }
+
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (final record in records) {
+      final name =
+          (record['product_name'] as String?)?.trim().toLowerCase() ?? '';
+      final shop =
+          (record['shop_name'] as String?)?.trim().toLowerCase() ?? '';
+      final price = (record['price'] as num?)?.toDouble();
+      final quantity = (record['quantity'] as num?)?.toDouble() ?? 1;
+      final unitPrice =
+          (record['unit_price'] as num?)?.toDouble() ??
+          (price != null ? price / (quantity <= 0 ? 1 : quantity) : null);
+      final key =
+          '$name|$shop|${price?.toStringAsFixed(4) ?? 'na'}|${unitPrice?.toStringAsFixed(6) ?? 'na'}';
+      grouped.putIfAbsent(key, () => []).add(record);
+    }
+
+    final deduped = <Map<String, dynamic>>[];
+    for (final group in grouped.values) {
+      final confirmationCount = group.length;
+      Map<String, dynamic>? latest;
+      for (final record in group) {
+        latest = _pickLatest(latest, record);
+      }
+      final merged = Map<String, dynamic>.from(latest ?? group.first);
+      merged['confirmation_count'] = confirmationCount;
+      deduped.add(merged);
+    }
+
+    int _compareNum(num? a, num? b) {
+      if (a == null && b == null) return 0;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      return a.compareTo(b);
+    }
+
+    deduped.sort((a, b) {
+      final unitA = (a['unit_price'] as num?)?.toDouble() ??
+          ((a['price'] as num?)?.toDouble() ?? 0);
+      final unitB = (b['unit_price'] as num?)?.toDouble() ??
+          ((b['price'] as num?)?.toDouble() ?? 0);
+      final cmpUnit = _compareNum(unitA, unitB);
+      if (cmpUnit != 0) return cmpUnit;
+      final dateA = DateTime.tryParse(a['created_at']?.toString() ?? '');
+      final dateB = DateTime.tryParse(b['created_at']?.toString() ?? '');
+      if (dateA == null && dateB == null) return 0;
+      if (dateA == null) return 1;
+      if (dateB == null) return -1;
+      return dateB.compareTo(dateA); // newest first when unit price ties
+    });
+
+    return deduped;
   }
 }
