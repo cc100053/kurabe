@@ -113,7 +113,7 @@ class AppState extends ChangeNotifier {
     if (cheaper != null) {
       final cheaperShop = await _db.getShopById(cheaper.shopId);
       if (cheaperShop != null) {
-        return 'Found cheaper at ${cheaperShop.name} on ${cheaper.date.toLocal().toIso8601String().split('T').first}: ${cheaper.finalPrice.toStringAsFixed(0)} Yen!';
+        return '${cheaper.date.toLocal().toIso8601String().split('T').first}に${cheaperShop.name}でより安い価格（${cheaper.finalPrice.toStringAsFixed(0)}円）が記録されています。';
       }
     }
     return null;

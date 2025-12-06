@@ -16,9 +16,11 @@ class GeminiService {
   final String _apiKey;
   final GenerativeModel _model;
 
+  // TODO: Scanning Logic - This method sends the image to Gemini to extract product details.
+  // The prompt below defines exactly what fields we look for (name, price, quantity, etc).
   Future<Map<String, dynamic>> analyzeImage(File imageFile) async {
     if (_apiKey.isEmpty) {
-      throw StateError('Missing GEMINI_API_KEY');
+      throw StateError('GEMINI_API_KEY が設定されていません');
     }
 
     final bytes = await imageFile.readAsBytes();
@@ -29,7 +31,14 @@ Extract the product name (ignore marketing fluff or pack counts) and the `raw_pr
 Look for `quantity` indicators (e.g., "3点", "3本", "3個", "pair") and default to 1 when uncertain.
 Look for discount stickers (e.g., "30% Off", "半額", "20円引") and extract the discount type and value.
 Classify `price_type`: "clearance" when discount stickers are present, "promo" for red promotional tags/ads, otherwise "standard".
-Identify the category as exactly ONE of: [野菜, 果物, 精肉, 鮮魚, 惣菜, 乳製品, 卵, 調味料, 飲料, お菓子, インスタント, 冷凍食品, 米/パン, 日用品, その他]. Use "その他" if unsure.
+Classify the product into EXACTLY one of these 18 tags (Japanese text must match): [野菜, 果物, 精肉, 鮮魚, 惣菜, 卵, 乳製品, 豆腐・納豆・麺, パン, 米・穀物, 調味料, インスタント, 飲料, お酒, お菓子, 冷凍食品, 日用品, その他].
+- Strict Rules:
+- If item is Beer, Sake, or Chu-hi -> "お酒".
+- If item is Water, Tea, Coffee, Juice, or Cola -> "飲料".
+- If item is Tofu, Natto, Kimchi, Fresh Udon/Soba/Konjac -> "豆腐・納豆・麺".
+- If item is Cup Noodle or retort/instant meal -> "インスタント".
+- If item is Bento, croquette, karaage, or fried deli foods -> "惣菜".
+Use "その他" if none fit.
 Return ONLY valid JSON with this structure:
 {
   "product_name": "String",
@@ -47,13 +56,13 @@ Return ONLY valid JSON with this structure:
 
     final responseText = response.text;
     if (responseText == null || responseText.trim().isEmpty) {
-      throw const FormatException('Empty response from Gemini');
+      throw const FormatException('Geminiからのレスポンスが空です');
     }
 
     final cleanedJson = _extractJson(responseText);
     final decoded = json.decode(cleanedJson);
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Response JSON was not an object');
+      throw const FormatException('レスポンスJSONがオブジェクトではありません');
     }
     return decoded;
   }

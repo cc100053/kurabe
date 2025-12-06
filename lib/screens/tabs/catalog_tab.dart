@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../screens/tabs/profile_tab.dart';
 import '../../constants/categories.dart';
@@ -26,6 +29,30 @@ class _CatalogTabState extends State<CatalogTab> {
   Position? _currentPosition;
   Timer? _debounce;
   bool _guestBlockedSearch = false;
+  static final Map<String, CategoryVisual> _categoryVisuals = {
+    // Fresh / Perishables
+    '野菜': CategoryVisual(color: Color(0xFFE8F5E9), icon: PhosphorIcons.carrot(PhosphorIconsStyle.bold)),
+    '果物': CategoryVisual(color: Color(0xFFFFEBEE), icon: PhosphorIcons.appleLogo(PhosphorIconsStyle.bold)),
+    '精肉': CategoryVisual(color: Color(0xFFFFE5E0), icon: LucideIcons.beef),
+    '鮮魚': CategoryVisual(color: Color(0xFFE3F2FD), icon: PhosphorIcons.fishSimple(PhosphorIconsStyle.bold)),
+    '惣菜': CategoryVisual(color: Color(0xFFFFF3E0), icon: Symbols.bento, weight: 700),
+    '卵': CategoryVisual(color: Color(0xFFFFF8E1), icon: PhosphorIcons.egg(PhosphorIconsStyle.bold)),
+    '乳製品': CategoryVisual(color: Color(0xFFE8F0FE), icon: PhosphorIcons.cheese(PhosphorIconsStyle.bold)),
+    '豆腐・納豆・麺': CategoryVisual(color: Color(0xFFE0F2F1), icon: LucideIcons.soup),
+    // Staples & Pantry
+    'パン': CategoryVisual(color: Color(0xFFFFF0D5), icon: PhosphorIcons.bread(PhosphorIconsStyle.bold)),
+    '米・穀物': CategoryVisual(color: Color(0xFFF7E9D7), icon: PhosphorIcons.grains(PhosphorIconsStyle.bold)),
+    '調味料': CategoryVisual(color: Color(0xFFFFF3E0), icon: PhosphorIcons.drop(PhosphorIconsStyle.bold)),
+    'インスタント': CategoryVisual(color: Color(0xFFFCE4EC), icon: PhosphorIcons.timer(PhosphorIconsStyle.bold)),
+    // Drinks & Snacks
+    '飲料': CategoryVisual(color: Color(0xFFE0F7FA), icon: PhosphorIcons.coffee(PhosphorIconsStyle.bold)),
+    'お酒': CategoryVisual(color: Color(0xFFF3E5F5), icon: PhosphorIcons.beerStein(PhosphorIconsStyle.bold)),
+    'お菓子': CategoryVisual(color: Color(0xFFFFF0F5), icon: PhosphorIcons.cookie(PhosphorIconsStyle.bold)),
+    // Others
+    '冷凍食品': CategoryVisual(color: Color(0xFFE0F2FF), icon: PhosphorIcons.snowflake(PhosphorIconsStyle.bold)),
+    '日用品': CategoryVisual(color: Color(0xFFF5F5F5), icon: PhosphorIcons.sprayBottle(PhosphorIconsStyle.bold)),
+    'その他': CategoryVisual(color: Color(0xFFECEFF1), icon: PhosphorIcons.dotsThree(PhosphorIconsStyle.bold)),
+  };
 
   @override
   void initState() {
@@ -109,21 +136,46 @@ class _CatalogTabState extends State<CatalogTab> {
   @override
   Widget build(BuildContext context) {
     final isSearching = _searchQuery.isNotEmpty;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('商品')),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('カタログ'),
+        backgroundColor: Colors.white,
+        scrolledUnderElevation: 0,
+      ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                hintText: '商品を検索...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha((0.03 * 255).round()),
+                    offset: const Offset(0, 4),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: TextField(
+                controller: _searchController,
+                style: const TextStyle(fontSize: 16),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                  hintText: '商品を検索...',
+                  hintStyle: TextStyle(color: Colors.grey[400]),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  filled: false,
                 ),
-                isDense: true,
               ),
             ),
           ),
@@ -170,7 +222,7 @@ class _CatalogTabState extends State<CatalogTab> {
     }
     final minUnitPriceByName = _findMinUnitPriceByName(_searchResults);
     return ListView.builder(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
       itemCount: _searchResults.length,
       itemBuilder: (context, index) {
         final record = _searchResults[index];
@@ -192,74 +244,59 @@ class _CatalogTabState extends State<CatalogTab> {
   Widget _buildCategoryGrid() {
     return GridView.count(
       crossAxisCount: 3,
-      padding: const EdgeInsets.all(12),
-      childAspectRatio: 1.1,
-      children: kCategories.map((name) {
-        final icon = _iconForCategory(name);
-        return Card(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => CategoryDetailScreen(categoryName: name),
-                ),
-              );
-            },
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 28),
-                  const SizedBox(height: 6),
-                  Text(
-                    name,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ],
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), // Increased padding
+      mainAxisSpacing: 16,
+      crossAxisSpacing: 16,
+      childAspectRatio: 0.85, // Taller cards
+      children: kCategories.asMap().entries.map((entry) {
+        final name = entry.value;
+        final visual = _categoryVisuals[name] ?? CategoryVisual(color: Colors.white, icon: Icons.grid_view);
+        
+        return InkWell(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CategoryDetailScreen(categoryName: name),
               ),
+            );
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: visual.color,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha((0.6 * 255).round()),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconTheme(
+                    data: IconTheme.of(context).copyWith(weight: visual.weight),
+                    child: Icon(visual.icon, size: 28, color: Colors.black87),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  name,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: Colors.black87,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
             ),
           ),
         );
       }).toList(),
     );
-  }
-
-  IconData _iconForCategory(String category) {
-    switch (category) {
-      case '野菜':
-        return Icons.eco;
-      case '果物':
-        return Icons.local_florist;
-      case '精肉':
-        return Icons.set_meal;
-      case '鮮魚':
-        return Icons.water;
-      case '惣菜':
-        return Icons.restaurant;
-      case '乳製品':
-        return Icons.icecream;
-      case '卵':
-        return Icons.breakfast_dining;
-      case '調味料':
-        return Icons.ramen_dining;
-      case '飲料':
-        return Icons.local_drink;
-      case 'お菓子':
-        return Icons.cake;
-      case 'インスタント':
-        return Icons.rice_bowl;
-      case '冷凍食品':
-        return Icons.ac_unit;
-      case '米/パン':
-        return Icons.bakery_dining;
-      case '日用品':
-        return Icons.inventory_2;
-      case 'その他':
-      default:
-        return Icons.category;
-    }
   }
 
   double? _computeUnitPrice(Map<String, dynamic> record) {
@@ -288,4 +325,11 @@ class _CatalogTabState extends State<CatalogTab> {
     }
     return map;
   }
+}
+
+class CategoryVisual {
+  CategoryVisual({required this.color, required this.icon, this.weight});
+  final Color color;
+  final IconData icon;
+  final double? weight;
 }

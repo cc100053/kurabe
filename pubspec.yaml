@@ -50,6 +50,9 @@ dependencies:
   sign_in_with_apple: ^6.1.0
   shared_preferences: ^2.3.3
   crypto: ^3.0.3
+  phosphor_flutter: ^2.1.0
+  lucide_icons: ^0.257.0
+  material_symbols_icons: ^4.2797.0
 
 dev_dependencies:
   flutter_test:

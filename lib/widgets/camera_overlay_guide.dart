@@ -86,8 +86,8 @@ class _CameraOverlayGuidePainter extends CustomPainter {
       bottomPaint,
     );
 
-    _paintLabel(canvas, productRect, 'PRODUCT');
-    _paintLabel(canvas, priceRect, 'PRICE');
+    _paintLabel(canvas, productRect, '商品');
+    _paintLabel(canvas, priceRect, '価格');
   }
 
   void _paintLabel(Canvas canvas, Rect rect, String label) {

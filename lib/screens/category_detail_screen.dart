@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -47,6 +48,28 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         _communityFuture ??= _fetchCommunityRecords();
       }
     });
+  }
+
+  Widget _buildSegment(String label, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 18, color: Colors.black87),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   bool _isCommunityCacheFresh() {
@@ -144,34 +167,31 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
-            child: SegmentedButton<_CategoryView>(
-              segments: const [
-                ButtonSegment(
-                  value: _CategoryView.mine,
-                  icon: Icon(Icons.person),
-                  label: Text('自分の記録'),
-                ),
-                ButtonSegment(
-                  value: _CategoryView.community,
-                  icon: Icon(Icons.public),
-                  label: Text('近くの情報'),
-                ),
-              ],
-              selected: {_selectedView},
-              onSelectionChanged: (selection) => _onToggle(selection.first),
-              style: ButtonStyle(
-                backgroundColor: MaterialStateProperty.resolveWith((states) {
-                  if (states.contains(MaterialState.selected)) {
-                    return Theme.of(context).colorScheme.primaryContainer;
-                  }
-                  return Theme.of(context).colorScheme.surface;
-                }),
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.all(4),
+              child: CupertinoSlidingSegmentedControl<_CategoryView>(
+                groupValue: _selectedView,
+                backgroundColor: Colors.transparent,
+                thumbColor: Colors.white,
+                padding: EdgeInsets.zero,
+                children: {
+                  _CategoryView.mine: _buildSegment('自分の記録', Icons.person_outline),
+                  _CategoryView.community: _buildSegment('コミュニティ', Icons.public),
+                },
+                onValueChanged: (value) {
+                  if (value != null) _onToggle(value);
+                },
               ),
             ),
           ),
           if (isCommunity)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
                   Icon(Icons.location_on,

@@ -46,7 +46,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
 
     final stopwatch = Stopwatch()..start();
     debugPrint(
-      '⏱️ [Insight] Start fetching: ${stopwatch.elapsedMilliseconds}ms',
+      '⏱️ [インサイト] 取得開始: ${stopwatch.elapsedMilliseconds}ms',
     );
 
     setState(() {
@@ -96,7 +96,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         return;
       }
       debugPrint(
-        '⏱️ [Insight] Location acquired: ${stopwatch.elapsedMilliseconds}ms',
+        '⏱️ [インサイト] 位置取得: ${stopwatch.elapsedMilliseconds}ms',
       );
       _currentPosition = position;
 
@@ -108,7 +108,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         recentDays: 7, // Cover "5 days ago" items safely
       );
       debugPrint(
-        '⏱️ [Insight] API Response received: ${stopwatch.elapsedMilliseconds}ms',
+        '⏱️ [インサイト] APIレスポンス受信: ${stopwatch.elapsedMilliseconds}ms',
       );
       if (!mounted) return;
       setState(() {
@@ -380,7 +380,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         color: Colors.green.shade50,
         borderColor: Colors.green.shade200,
         title:
-            'より安い価格を発見！ ${_priceFormat.format(communityPrice)}${unitLabel.isNotEmpty ? unitLabel : ""} ($communityShop)',
+            'より安い価格を発見！ ${_priceFormat.format(communityPrice)}${unitLabel.isNotEmpty ? unitLabel : ""}（$communityShop）',
         icon: Icons.trending_down,
         subtitle: subtitleParts.isNotEmpty ? subtitleParts.join(' • ') : null,
       );

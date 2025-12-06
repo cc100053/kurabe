@@ -1,6 +1,6 @@
 # Kurabe
 
-Kurabe is a Flutter app for price comparison. Snap a price tag, let Gemini parse the details, and save to Supabase. Browse your own records or nearby community finds by category with best-price hints.
+Kurabe is a Flutter app for price comparison. Snap a price tag, let Gemini parse the details, and save to Supabase. Browse your own records or nearby community finds by category with best-price hints. UI iconography now uses Phosphor Icons (navigation, categories) plus a Lucide beef icon and Material Symbols bento for a modern, high-end look.
 
 ## Features
 - Smart add/edit: camera capture, AI tag parsing (Gemini 1.5), discounts, quantity, unit price, taxed total, best-price check.

@@ -52,7 +52,7 @@ class CommunityProductTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
           color: isCheapest
-              ? const Color(0xFFFF3B30).withOpacity(0.3)
+              ? const Color(0xFFFF3B30).withAlpha((0.3 * 255).round())
               : colorScheme.outlineVariant,
           width: isCheapest ? 1.5 : 1,
         ),
@@ -203,7 +203,8 @@ class CommunityProductTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFF3B30).withOpacity(0.3),
+            color:
+                const Color(0xFFFF3B30).withAlpha((0.3 * 255).round()),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -348,10 +349,10 @@ class CommunityProductTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF34C759).withOpacity(0.12),
+        color: const Color(0xFF34C759).withAlpha((0.12 * 255).round()),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
-          color: const Color(0xFF34C759).withOpacity(0.4),
+          color: const Color(0xFF34C759).withAlpha((0.4 * 255).round()),
           width: 1,
         ),
       ),

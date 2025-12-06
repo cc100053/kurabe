@@ -30,34 +30,34 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Compare prices with the community.',
+                'コミュニティと価格を比べよう。',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 40),
               _buildButton(
-                label: 'Continue as Guest',
+                label: 'ゲストとして続行',
                 onPressed: _isLoading ? null : _continueAsGuest,
               ),
               const SizedBox(height: 12),
               _buildButton(
-                label: 'Sign in with Google',
+                label: 'Googleでログイン',
                 onPressed: _isLoading ? null : _signInWithGoogle,
               ),
               const SizedBox(height: 12),
               _buildButton(
-                label: 'Log in with Email',
+                label: 'メールでログイン',
                 onPressed: _isLoading ? null : _loginWithEmail,
               ),
               const SizedBox(height: 12),
               _buildButton(
-                label: 'Sign up with Email',
+                label: 'メールで登録',
                 onPressed: _isLoading ? null : _signUpWithEmail,
               ),
               if (Platform.isIOS) ...[
                 const SizedBox(height: 12),
                 _buildButton(
-                  label: 'Sign in with Apple',
+                  label: 'Appleでログイン',
                   onPressed: _isLoading ? null : _signInWithApple,
                 ),
               ],
@@ -106,7 +106,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Future<void> _continueAsGuest() async {
     await _runAuthAction(() async {
       await Supabase.instance.client.auth.signInAnonymously();
-      return 'Signed in as guest.';
+      return 'ゲストとしてログインしました。';
     });
   }
 
@@ -126,8 +126,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   Future<void> _signUpWithEmail() async {
     final creds = await _promptForEmailPassword(
-      title: 'Sign up with Email',
-      actionText: 'Sign up',
+      title: 'メールで登録',
+      actionText: '登録',
     );
     if (creds == null) return;
     await _runAuthAction(() async {
@@ -136,16 +136,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         password: creds.$2,
       );
       if (response.session != null) {
-        return 'Signed in successfully.';
+        return 'ログインしました。';
       }
-      return 'Check your email to confirm sign up.';
+      return '確認メールを送信しました。メールを確認してください。';
     });
   }
 
   Future<void> _loginWithEmail() async {
     final creds = await _promptForEmailPassword(
-      title: 'Log in with Email',
-      actionText: 'Log in',
+      title: 'メールでログイン',
+      actionText: 'ログイン',
     );
     if (creds == null) return;
     await _runAuthAction(() async {
@@ -154,9 +154,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         password: creds.$2,
       );
       if (response.session != null) {
-        return 'Logged in.';
+        return 'ログインしました。';
       }
-      return 'Login failed.';
+      return 'ログインに失敗しました。';
     });
   }
 
@@ -177,19 +177,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               TextField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email'),
+                decoration: const InputDecoration(labelText: 'メールアドレス'),
               ),
               TextField(
                 controller: passwordController,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: 'Password'),
+                decoration: const InputDecoration(labelText: 'パスワード'),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: const Text('キャンセル'),
             ),
             TextButton(
               onPressed: () {

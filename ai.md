@@ -1,32 +1,30 @@
+Act as a Senior Flutter Engineer. I need to connect real data to the `ProfileScreen` (`@profile_screen.dart`).
 
-**Context:**
-I am refining the "Link with Email" flow.
-**Current Logic:** Ask for Email & Password.
-**Challenge:**
-1.  **Scenario A (New Email):** If the email is new, `updateUser` works perfectly (Guest becomes Registered User).
-2.  **Scenario B (Existing Email):** If the email is already taken, `updateUser` throws an error. We must then allow the user to **Sign In** and **MOVE** their guest data to the existing account.
+**Current Status:**
+The screen currently displays hardcoded dummy data.
 
-**Task: Implement Email Linking with Data Migration Strategy**
+**Requirement 1: Real User Info**
+- Get the `User` from `Supabase.instance.client.auth.currentUser`.
+- **Avatar:** Display the user's Google/Apple profile picture (`user.userMetadata?['avatar_url']`). If null, show the current green circle with initials. Make it changeable, so the user can upload a new picture as an avatar.
+- **Name:** Display the user's Google/Apple profile name (`user.userMetadata?['name']`). If null, show the user's email. Make it changeable, so the user can change their name.
 
-**1. Database RPC (The "Mover"):**
-* Create a generic SQL function to transfer ownership of records.
-* **SQL:** `transfer_guest_data(record_ids bigint[])`
-    * **Security:** Use `SECURITY DEFINER` (to bypass RLS, allowing the new user to "claim" the old guest records).
-    * **Logic:** `UPDATE price_records SET user_id = auth.uid() WHERE id = ANY(record_ids);`
+**Requirement 2: Real Stats (Replace Dummy Cards)**
+- Fetch statistics from `price_records` table for the current `user_id`.
+- **Card 1: "Scans" (Total Uploads)**
+  - Logic: `COUNT(*)` of records by this user.
+- **Card 2: "Level" (Rank)**
+  - Logic: Calculate based on Scan count.
+  - 0-9 scans: "Beginner" (見習)
+  - 10-49 scans: "Pro" (熟練)
+  - 50+ scans: "Master" (達人)
+  - Replace the old "#5" with this text.
+- **Card 3: "Active Days" (Instead of Money Saved)**
+  - Logic: Count distinct days the user uploaded a record. (If too complex for now, just hide this card or show "Join Date").
 
-**2. Update `ProfileTab` Logic (`_linkWithEmail`):**
-* **Step 1:** Try `await Supabase.instance.client.auth.updateUser(...)`.
-    * If successful: Show "Confirmation email sent". Done.
-* **Step 2 (The Fallback):** Catch `AuthException` where code/message indicates "User already registered".
-* **Step 3:** Show Dialog: "Account exists. Log in to merge data?"
-    * Input: Password (reuse from previous dialog).
-* **Step 4 (The Migration Dance):**
-    * **A. Preserve Data:** Query all IDs of current guest's records:
-        `final guestRecordIds = ... (Select id from price_records where user_id = current_guest_id)`
-    * **B. Sign In:** `await signInWithPassword(email, password)`. (This switches the auth session to the existing user).
-    * **C. Claim Data:** If login success AND `guestRecordIds` is not empty:
-        `await rpc('transfer_guest_data', params: {'record_ids': guestRecordIds})`.
-    * **D. Feedback:** Show "Logged in & Data Merged!".
+**Technical Implementation:**
+- Create a `Future<Map<String, dynamic>> fetchProfileStats()` function in the widget.
+- Use a `FutureBuilder` to load these numbers.
+- Handle the loading state (show spinners instead of numbers).
 
-**Output:**
-1.  The **SQL Command** for `transfer_guest_data`.
+**Action:**
+Refactor `@profile_screen.dart` to implement this logic using Supabase Query (Postgrest).

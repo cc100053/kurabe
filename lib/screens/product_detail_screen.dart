@@ -23,7 +23,7 @@ class ProductDetailScreen extends StatelessWidget {
           }
           final history = snapshot.data!;
           if (history.isEmpty) {
-            return const Center(child: Text('No history yet'));
+            return const Center(child: Text('まだ履歴がありません'));
           }
           final minPrice = history.map((e) => e.finalPrice).reduce((a, b) => a < b ? a : b);
           return ListView.builder(

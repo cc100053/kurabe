@@ -60,7 +60,7 @@ class LocationService {
   }) async {
     if (apiKey.isEmpty) return;
     debugPrint(
-      '[LocationService] preFetchLocation start. forceRefresh=$forceRefresh cacheFresh=${_isCacheFresh(cacheMaxAge)}',
+      '[LocationService] 事前取得開始 forceRefresh=$forceRefresh cacheFresh=${_isCacheFresh(cacheMaxAge)}',
     );
     if (forceRefresh) {
       cachedShops = null;
@@ -73,7 +73,7 @@ class LocationService {
         cachedShops!.isNotEmpty &&
         _isCacheFresh(cacheMaxAge)) {
       debugPrint(
-        '[LocationService] Using fresh cached shops (${cachedShops!.length})',
+        '[LocationService] キャッシュ済み店舗を再利用 (${cachedShops!.length}件)',
       );
       return;
     }
@@ -85,12 +85,12 @@ class LocationService {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        debugPrint('[LocationService] Location permission denied: $permission');
+        debugPrint('[LocationService] 位置情報の許可がありません: $permission');
         return;
       }
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        debugPrint('[LocationService] Location services disabled');
+        debugPrint('[LocationService] 位置情報サービスがオフです');
         return;
       }
 
@@ -104,12 +104,12 @@ class LocationService {
       }
       position ??= await Geolocator.getLastKnownPosition();
       if (position == null) {
-        debugPrint('[LocationService] No position available');
+        debugPrint('[LocationService] 位置を取得できません');
         return;
       }
 
       debugPrint(
-        '[LocationService] Position acquired: ${position.latitude}, ${position.longitude}',
+        '[LocationService] 位置取得: ${position.latitude}, ${position.longitude}',
       );
       final shops = await _placesService.searchNearby(
         apiKey: apiKey,
@@ -124,9 +124,9 @@ class LocationService {
       cachedLatitude = position.latitude;
       cachedLongitude = position.longitude;
       _fetchTime = DateTime.now();
-      debugPrint('[LocationService] Places fetched: ${shops.length}');
+      debugPrint('[LocationService] 店舗候補を取得: ${shops.length}件');
     } catch (e, stack) {
-      debugPrint('LocationService prefetch failed: $e');
+      debugPrint('LocationServiceの事前取得に失敗: $e');
       debugPrintStack(stackTrace: stack);
     }
   }

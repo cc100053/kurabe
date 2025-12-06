@@ -85,7 +85,7 @@ class GooglePlacesService {
 
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
-      throw Exception('Unexpected Google Places response');
+      throw Exception('想定外のGoogle Placesレスポンス');
     }
 
     final placesJson = decoded['places'];
@@ -184,7 +184,7 @@ List<GooglePlace> _filterConvenienceStores(
     if (isMyBasket) {
       if (kDebugMode) {
         debugPrint(
-          '[Places] Whitelisted My Basket: ${place.name} types=$typesLower',
+          '[Places] まいばすけっとを許可: ${place.name} 種類=$typesLower',
         );
       }
       result.add(place);
@@ -196,7 +196,7 @@ List<GooglePlace> _filterConvenienceStores(
     if (shouldExclude) {
       if (kDebugMode) {
         debugPrint(
-          '[Places] Dropped (excluded type): ${place.name} types=$typesLower',
+          '[Places] 除外タイプでスキップ: ${place.name} 種類=$typesLower',
         );
       }
       continue;

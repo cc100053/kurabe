@@ -163,6 +163,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
     return File(sourcePath).copy(savedPath);
   }
 
+  // TODO: Scanning Logic (Orchestration) - Prepares image and calls GeminiService.
   Future<void> _processImageFile(File file) async {
     setState(() {
       _imageFile = file;
@@ -184,7 +185,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
     if (compressed != null) {
       imageToSend = compressed;
       debugPrint(
-        'Image compressed for Gemini: ${file.lengthSync()} bytes -> ${imageToSend.lengthSync()} bytes',
+        'Gemini用に画像を圧縮: ${file.lengthSync()} bytes -> ${imageToSend.lengthSync()} bytes',
       );
     }
     try {
@@ -233,7 +234,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
       });
       _calculateFinalPrice();
     } catch (e, stack) {
-      debugPrint('Gemini analyze failed: $e');
+      debugPrint('Gemini解析に失敗しました: $e');
       debugPrintStack(stackTrace: stack);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -334,7 +335,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
       await output.writeAsBytes(compressedBytes, flush: true);
       return output;
     } catch (e, stack) {
-      debugPrint('Image compression failed: $e');
+      debugPrint('画像の圧縮に失敗しました: $e');
       debugPrintStack(stackTrace: stack);
       return null;
     }
@@ -443,7 +444,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
         );
       });
     } catch (e, stack) {
-      debugPrint('Community insight failed: $e');
+      debugPrint('コミュニティインサイト取得に失敗しました: $e');
       debugPrintStack(stackTrace: stack);
       setState(() => _setInsightState(_InsightState.none));
     }
@@ -632,7 +633,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
             ],
             if (_unitPrice != null)
               Text(
-                '@ ¥${_unitPrice!.toStringAsFixed(0)} / 個',
+                '1個あたり ¥${_unitPrice!.toStringAsFixed(0)}',
                 style: const TextStyle(color: Colors.black54),
               ),
           ],
@@ -656,7 +657,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
       text = '付近で最安値を見つけました！';
       if (_insightPrice != null && _insightShop != null) {
         text =
-            '付近で最安値を見つけました！(¥${_insightPrice!.round()} at $_insightShop)';
+            '付近で最安値を見つけました！(¥${_insightPrice!.round()} • $_insightShop)';
       }
     } else {
       bg = Colors.green.shade200;
@@ -667,7 +668,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
       final distanceText = _insightDistanceMeters != null
           ? ' (${_formatDistance(_insightDistanceMeters!)})'
           : '';
-      text = 'より安い価格を発見！$priceText at $shopText$distanceText';
+      text = 'より安い価格を発見！$shopTextで$priceText$distanceText';
     }
     return Card(
       color: bg,

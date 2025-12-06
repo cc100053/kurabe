@@ -34,12 +34,12 @@ class YahooPlaceService {
 
     final response = await _client.get(uri).timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) {
-      throw Exception('Yahoo API error ${response.statusCode}');
+      throw Exception('Yahoo APIエラー ${response.statusCode}');
     }
 
     final decoded = jsonDecode(response.body);
     if (decoded is! Map<String, dynamic>) {
-      throw Exception('Unexpected Yahoo API response');
+      throw Exception('想定外のYahoo APIレスポンス');
     }
     final features = decoded['Feature'];
     if (features is! List) {

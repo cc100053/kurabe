@@ -1,4 +1,4 @@
-Project: Flutter price-comparison app backed by Supabase with AI tag parsing, personal diary views, and community search.
+Project: Flutter price-comparison app backed by Supabase with AI tag parsing, personal diary views, and community search. UI icons upgraded to Phosphor (nav + categories), Lucide beef for meat, and Material Symbols bento for惣菜.
 
 What’s wired up
 - Supabase bootstrap: `supabase_flutter` init in `main.dart` after dotenv; image upload to `price_tags`; inserts into `price_records`.

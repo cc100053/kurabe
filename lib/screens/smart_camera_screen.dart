@@ -36,7 +36,7 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
-        setState(() => _error = 'No cameras available');
+        setState(() => _error = '利用可能なカメラがありません');
         return;
       }
       final backCamera = cameras.firstWhere(
@@ -62,7 +62,7 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
         _error = null;
       });
     } catch (e) {
-      setState(() => _error = 'Failed to initialize camera: $e');
+      setState(() => _error = 'カメラの初期化に失敗しました: $e');
     }
   }
 
@@ -78,7 +78,7 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to capture photo: $e')),
+        SnackBar(content: Text('撮影に失敗しました: $e')),
       );
     } finally {
       if (mounted) {
@@ -105,7 +105,7 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('Smart Camera'),
+        title: const Text('スマートカメラ'),
       ),
       body: _error != null
           ? Center(
