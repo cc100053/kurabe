@@ -1,13 +1,14 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:lucide_icons/lucide_icons.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
+import '../../main.dart';
 import '../../screens/tabs/profile_tab.dart';
 import '../../constants/categories.dart';
+import '../../constants/category_visuals.dart';
 import '../../screens/category_detail_screen.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/community_product_tile.dart';
@@ -22,49 +23,35 @@ class CatalogTab extends StatefulWidget {
 class _CatalogTabState extends State<CatalogTab> {
   final SupabaseService _supabaseService = SupabaseService();
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   String _searchQuery = '';
   bool _isSearching = false;
+  bool _isSearchFocused = false;
   List<Map<String, dynamic>> _searchResults = [];
   Position? _currentPosition;
   Timer? _debounce;
   bool _guestBlockedSearch = false;
-  static final Map<String, CategoryVisual> _categoryVisuals = {
-    // Fresh / Perishables
-    '野菜': CategoryVisual(color: Color(0xFFE8F5E9), icon: PhosphorIcons.carrot(PhosphorIconsStyle.bold)),
-    '果物': CategoryVisual(color: Color(0xFFFFEBEE), icon: PhosphorIcons.appleLogo(PhosphorIconsStyle.bold)),
-    '精肉': CategoryVisual(color: Color(0xFFFFE5E0), icon: LucideIcons.beef),
-    '鮮魚': CategoryVisual(color: Color(0xFFE3F2FD), icon: PhosphorIcons.fishSimple(PhosphorIconsStyle.bold)),
-    '惣菜': CategoryVisual(color: Color(0xFFFFF3E0), icon: Symbols.bento, weight: 700),
-    '卵': CategoryVisual(color: Color(0xFFFFF8E1), icon: PhosphorIcons.egg(PhosphorIconsStyle.bold)),
-    '乳製品': CategoryVisual(color: Color(0xFFE8F0FE), icon: PhosphorIcons.cheese(PhosphorIconsStyle.bold)),
-    '豆腐・納豆・麺': CategoryVisual(color: Color(0xFFE0F2F1), icon: LucideIcons.soup),
-    // Staples & Pantry
-    'パン': CategoryVisual(color: Color(0xFFFFF0D5), icon: PhosphorIcons.bread(PhosphorIconsStyle.bold)),
-    '米・穀物': CategoryVisual(color: Color(0xFFF7E9D7), icon: PhosphorIcons.grains(PhosphorIconsStyle.bold)),
-    '調味料': CategoryVisual(color: Color(0xFFFFF3E0), icon: PhosphorIcons.drop(PhosphorIconsStyle.bold)),
-    'インスタント': CategoryVisual(color: Color(0xFFFCE4EC), icon: PhosphorIcons.timer(PhosphorIconsStyle.bold)),
-    // Drinks & Snacks
-    '飲料': CategoryVisual(color: Color(0xFFE0F7FA), icon: PhosphorIcons.coffee(PhosphorIconsStyle.bold)),
-    'お酒': CategoryVisual(color: Color(0xFFF3E5F5), icon: PhosphorIcons.beerStein(PhosphorIconsStyle.bold)),
-    'お菓子': CategoryVisual(color: Color(0xFFFFF0F5), icon: PhosphorIcons.cookie(PhosphorIconsStyle.bold)),
-    // Others
-    '冷凍食品': CategoryVisual(color: Color(0xFFE0F2FF), icon: PhosphorIcons.snowflake(PhosphorIconsStyle.bold)),
-    '日用品': CategoryVisual(color: Color(0xFFF5F5F5), icon: PhosphorIcons.sprayBottle(PhosphorIconsStyle.bold)),
-    'その他': CategoryVisual(color: Color(0xFFECEFF1), icon: PhosphorIcons.dotsThree(PhosphorIconsStyle.bold)),
-  };
+
+  static final Map<String, CategoryVisual> _categoryVisuals = kCategoryVisuals;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    _searchFocusNode.addListener(_onFocusChanged);
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onFocusChanged() {
+    setState(() => _isSearchFocused = _searchFocusNode.hasFocus);
   }
 
   void _onSearchChanged() {
@@ -74,7 +61,7 @@ class _CatalogTabState extends State<CatalogTab> {
       _searchQuery = next;
       _guestBlockedSearch = false;
     });
-    _ensureLocation(); // fire and forget to warm location cache
+    _ensureLocation();
     _debounce?.cancel();
     if (next.isEmpty) {
       setState(() => _searchResults = []);
@@ -138,164 +125,379 @@ class _CatalogTabState extends State<CatalogTab> {
     final isSearching = _searchQuery.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('カタログ'),
-        backgroundColor: Colors.white,
-        scrolledUnderElevation: 0,
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha((0.03 * 255).round()),
-                    offset: const Offset(0, 4),
-                    blurRadius: 10,
+      backgroundColor: KurabeColors.background,
+      body: CustomScrollView(
+        slivers: [
+          // App Bar
+          SliverAppBar(
+            floating: true,
+            snap: true,
+            backgroundColor: KurabeColors.background,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            expandedHeight: 70,
+            flexibleSpace: FlexibleSpaceBar(
+              background: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                  child: Row(
+                    children: [
+                      Text(
+                        'カタログ',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          color: KurabeColors.textPrimary,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: KurabeColors.primary.withAlpha(26),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${kCategories.length}カテゴリ',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: KurabeColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: TextField(
-                controller: _searchController,
-                style: const TextStyle(fontSize: 16),
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                  hintText: '商品を検索...',
-                  hintStyle: TextStyle(color: Colors.grey[400]),
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                  filled: false,
                 ),
               ),
             ),
           ),
-          Expanded(
-            child: isSearching ? _buildSearchResults() : _buildCategoryGrid(),
+
+          // Search Bar
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: KurabeColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _isSearchFocused
+                        ? KurabeColors.primary
+                        : KurabeColors.border,
+                    width: _isSearchFocused ? 2 : 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _isSearchFocused
+                          ? KurabeColors.primary.withAlpha(26)
+                          : Colors.black.withAlpha(8),
+                      blurRadius: _isSearchFocused ? 16 : 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  focusNode: _searchFocusNode,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: KurabeColors.textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.only(left: 16, right: 12),
+                      child: Icon(
+                        PhosphorIcons.magnifyingGlass(PhosphorIconsStyle.bold),
+                        color: _isSearchFocused
+                            ? KurabeColors.primary
+                            : KurabeColors.textTertiary,
+                        size: 22,
+                      ),
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minWidth: 50,
+                      minHeight: 50,
+                    ),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(
+                              PhosphorIcons.xCircle(PhosphorIconsStyle.fill),
+                              color: KurabeColors.textTertiary,
+                              size: 20,
+                            ),
+                            onPressed: () {
+                              _searchController.clear();
+                              _searchFocusNode.unfocus();
+                            },
+                          )
+                        : null,
+                    hintText: '商品を検索...',
+                    hintStyle: TextStyle(
+                      color: KurabeColors.textTertiary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 16,
+                    ),
+                    filled: false,
+                  ),
+                ),
+              ),
+            ),
           ),
+
+          // Content
+          if (isSearching)
+            _buildSearchResultsSliver()
+          else
+            _buildCategoryGridSliver(),
+
+          // Bottom padding
+          const SliverToBoxAdapter(child: SizedBox(height: 120)),
         ],
       ),
     );
   }
 
-  Widget _buildSearchResults() {
+  Widget _buildSearchResultsSliver() {
     if (_guestBlockedSearch) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+      return SliverFillRemaining(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: KurabeColors.warning.withAlpha(26),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    PhosphorIcons.lock(PhosphorIconsStyle.duotone),
+                    size: 48,
+                    color: KurabeColors.warning,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'コミュニティ検索は\n登録ユーザーのみ利用できます',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                    color: KurabeColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ProfileTab()),
+                    );
+                  },
+                  child: const Text('新規登録'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    if (_isSearching) {
+      return const SliverFillRemaining(
+        child: Center(
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: KurabeColors.primary,
+          ),
+        ),
+      );
+    }
+    if (_searchResults.isEmpty) {
+      return SliverFillRemaining(
+        child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'コミュニティ検索は登録ユーザーのみ利用できます。',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.bold),
+              Icon(
+                PhosphorIcons.magnifyingGlass(PhosphorIconsStyle.duotone),
+                size: 56,
+                color: KurabeColors.textTertiary,
               ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => const ProfileTab()));
-                },
-                child: const Text('新規登録'),
+              const SizedBox(height: 16),
+              const Text(
+                '結果が見つかりませんでした',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: KurabeColors.textSecondary,
+                ),
               ),
             ],
           ),
         ),
       );
     }
-    if (_isSearching) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_searchResults.isEmpty) {
-      return const Center(child: Text('結果が見つかりませんでした'));
-    }
     final minUnitPriceByName = _findMinUnitPriceByName(_searchResults);
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-      itemCount: _searchResults.length,
-      itemBuilder: (context, index) {
-        final record = _searchResults[index];
-        final unitPrice = _computeUnitPrice(record);
-        final name =
-            (record['product_name'] as String?)?.trim().toLowerCase() ?? '';
-        final minForName = minUnitPriceByName[name];
-        final isCheapest = unitPrice != null &&
-            minForName != null &&
-            (unitPrice - minForName).abs() < 1e-6;
-        return CommunityProductTile(
-          record: record,
-          isCheapestOverride: isCheapest,
-        );
-      },
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final record = _searchResults[index];
+            final unitPrice = _computeUnitPrice(record);
+            final name = (record['product_name'] as String?)
+                    ?.trim()
+                    .toLowerCase() ??
+                '';
+            final minForName = minUnitPriceByName[name];
+            final isCheapest = unitPrice != null &&
+                minForName != null &&
+                (unitPrice - minForName).abs() < 1e-6;
+            return CommunityProductTile(
+              record: record,
+              isCheapestOverride: isCheapest,
+            );
+          },
+          childCount: _searchResults.length,
+        ),
+      ),
     );
   }
 
-  Widget _buildCategoryGrid() {
-    return GridView.count(
-      crossAxisCount: 3,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), // Increased padding
-      mainAxisSpacing: 16,
-      crossAxisSpacing: 16,
-      childAspectRatio: 0.85, // Taller cards
-      children: kCategories.asMap().entries.map((entry) {
-        final name = entry.value;
-        final visual = _categoryVisuals[name] ?? CategoryVisual(color: Colors.white, icon: Icons.grid_view);
-        
-        return InkWell(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => CategoryDetailScreen(categoryName: name),
-              ),
-            );
+  Widget _buildCategoryGridSliver() {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.9,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final name = kCategories[index];
+            final visual = _categoryVisuals[name] ??
+                CategoryVisual(
+                  color: Colors.grey.shade100,
+                  gradientEnd: Colors.grey.shade200,
+                  icon: PhosphorIcons.gridFour(PhosphorIconsStyle.fill),
+                );
+
+            return _buildCategoryCard(context, name, visual);
           },
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            decoration: BoxDecoration(
-              color: visual.color,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha((0.6 * 255).round()),
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconTheme(
-                    data: IconTheme.of(context).copyWith(weight: visual.weight),
-                    child: Icon(visual.icon, size: 28, color: Colors.black87),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  name,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: Colors.black87,
-                    letterSpacing: -0.2,
-                  ),
-                ),
-              ],
-            ),
+          childCount: kCategories.length,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryCard(
+    BuildContext context,
+    String name,
+    CategoryVisual visual,
+  ) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => CategoryDetailScreen(categoryName: name),
           ),
         );
-      }).toList(),
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [visual.color, visual.gradientEnd],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: visual.gradientEnd.withAlpha(77),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withAlpha(102),
+                    Colors.white.withAlpha(26),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Icon container with glass effect
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(179),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(8),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconTheme(
+                      data: IconTheme.of(context).copyWith(
+                        weight: visual.weight ?? 400,
+                      ),
+                      child: Icon(
+                        visual.icon,
+                        size: 26,
+                        color: const Color(0xFF374151),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  // Label
+                  Text(
+                    name,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: Color(0xFF374151),
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -325,11 +527,4 @@ class _CatalogTabState extends State<CatalogTab> {
     }
     return map;
   }
-}
-
-class CategoryVisual {
-  CategoryVisual({required this.color, required this.icon, this.weight});
-  final Color color;
-  final IconData icon;
-  final double? weight;
 }

@@ -1,30 +1,26 @@
-Act as a Senior Flutter Engineer. I need to connect real data to the `ProfileScreen` (`@profile_screen.dart`).
+Act as a Senior Product Designer. I want to balance my Bottom Navigation Bar by adding a 4th Tab. Use the same design to keep consistency.
 
-**Current Status:**
-The screen currently displays hardcoded dummy data.
+**Current Problem:**
+3 Tabs + 1 Center FAB creates an asymmetrical layout (2 items on left, 1 on right).
 
-**Requirement 1: Real User Info**
-- Get the `User` from `Supabase.instance.client.auth.currentUser`.
-- **Avatar:** Display the user's Google/Apple profile picture (`user.userMetadata?['avatar_url']`). If null, show the current green circle with initials. Make it changeable, so the user can upload a new picture as an avatar.
-- **Name:** Display the user's Google/Apple profile name (`user.userMetadata?['name']`). If null, show the user's email. Make it changeable, so the user can change their name.
+**Solution:**
+Add a new tab to create a symmetrical **2-1-2 layout**:
+`[Timeline] [Catalog] --(SCAN)-- [Shopping List] [Profile]`
 
-**Requirement 2: Real Stats (Replace Dummy Cards)**
-- Fetch statistics from `price_records` table for the current `user_id`.
-- **Card 1: "Scans" (Total Uploads)**
-  - Logic: `COUNT(*)` of records by this user.
-- **Card 2: "Level" (Rank)**
-  - Logic: Calculate based on Scan count.
-  - 0-9 scans: "Beginner" (見習)
-  - 10-49 scans: "Pro" (熟練)
-  - 50+ scans: "Master" (達人)
-  - Replace the old "#5" with this text.
-- **Card 3: "Active Days" (Instead of Money Saved)**
-  - Logic: Count distinct days the user uploaded a record. (If too complex for now, just hide this card or show "Join Date").
+**Task 1: Create the "Shopping List" Placeholder**
+- Create a new file `@shopping_list_screen.dart`.
+- For now, just make it a simple `Scaffold` with a title "Shopping List" (買い物リスト) and a placeholder "Coming Soon" UI.
+- Use `PhosphorIcons.checkSquare` (or `listChecks`) as the icon.
 
-**Technical Implementation:**
-- Create a `Future<Map<String, dynamic>> fetchProfileStats()` function in the widget.
-- Use a `FutureBuilder` to load these numbers.
-- Handle the loading state (show spinners instead of numbers).
+**Task 2: Update Main Scaffold (`@main_scaffold.dart`)**
+- Update the `NavigationBar` items list to include this new tab at index 2 (shifting Profile to index 3).
+- **Critical Layout Adjustment:**
+  - Ensure the `FloatingActionButton` (Scan) is docked in the center.
+  - Configure the `BottomAppBar` (or NavigationBar) to have a "notch" or gap for the FAB, strictly enforcing the 2-items-left and 2-items-right split.
+  - If using a standard `NavigationBar`, ensure the sequence is: `Timeline, Catalog, (Gap), ShoppingList, Profile`.
 
-**Action:**
-Refactor `@profile_screen.dart` to implement this logic using Supabase Query (Postgrest).
+**Task 3: About database**
+- tell me if anything I have to change on supabase, like create new table, etc.
+
+**Visual Goal:**
+Achieve perfect visual symmetry.

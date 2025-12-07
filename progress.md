@@ -1,13 +1,37 @@
 Project: Flutter price-comparison app backed by Supabase with AI tag parsing, personal diary views, and community search. UI icons upgraded to Phosphor (nav + categories), Lucide beef for meat, and Material Symbols bento for惣菜.
 
-What’s wired up
+What's wired up
 - Supabase bootstrap: `supabase_flutter` init in `main.dart` after dotenv; image upload to `price_tags`; inserts into `price_records`.
 - Add/Edit flow: Gemini 1.5 prompt extracts product/ raw_price / quantity / discount_info / price_type / category. UI supports quantity, original price, discount type/value, price type, shows unit price + taxed total (pre-tax discounts, 8% tax floor), and saves all new fields; best-price checks use unit price.
 - Community insight/search: RPCs for nearby cheapest and fuzzy product search; unit-price sort via updated `get_nearby_cheapest`.
-- Auth & profile: Welcome gate with guest, Google, Apple, email. ProfileTab shows user info, hides logout for guests, offers link-with Google/Apple/email; email linking handles “email exists” by signing in and migrating guest data via `transfer_guest_data` RPC; guest reset button added.
+- Auth & profile: Welcome gate with guest, Google, Apple, email. ProfileTab shows user info, hides logout for guests, offers link-with Google/Apple/email; email linking handles "email exists" by signing in and migrating guest data via `transfer_guest_data` RPC; guest reset button added.
 - Privacy controls: Timeline and catalog category view filter by `user_id` on the client; community search/nearby cheapest blocked for guests (app-side); guest users prompted to link instead of logout.
 - UI/UX: ProductDetailSheet with community insight (gated for guests), catalog tab with categories and gated search, saving dialogs, error SnackBars, and suggestion chips.
  - Category detail community view groups nearby records by product/shop/price/unit price/location, counts confirmations, returns latest record per group via `get_nearby_records_by_category`; UI shows confirmation badge when count > 1 and only marks cheapest per product.
+
+## UI/UX Overhaul (December 2024)
+
+Complete visual redesign transforming Kurabe into a premium, modern app inspired by Airbnb, Headspace, and Japanese fintech apps.
+
+### Design System (`main.dart`)
+- **Custom Color Palette**: `KurabeColors` class with deeper teal (#1A8D7A), warm cream surfaces (#FAF9F7), and refined text hierarchy
+- **Typography**: Google Fonts Noto Sans JP throughout with optimized weights and letter-spacing
+- **Component Themes**: Cards (20px radius), inputs (neumorphic style), buttons (gradient-ready), dialogs, and more
+
+### Navigation (`main_scaffold.dart`)
+- **Bottom Nav Bar**: Symmetric layout with Expanded sections, animated pill indicators, labels with font weight transitions
+- **Floating Action Button**: 68px with dual-layer gradient and premium shadow effect
+- **Page Transitions**: Custom fade + slide animations for scan screen
+
+### Tab Screens
+- **Timeline Tab**: Emoji greeting based on time of day, badge-styled date header, gradient date section headers, polished empty states
+- **Catalog Tab**: Floating search bar with animated focus, glassmorphism category cards with gradient backgrounds
+- **Profile Tab**: Gradient header with avatar camera badge, floating stats card with colored icons, grouped settings tiles
+
+### Shared Widgets
+- **CommunityProductTile**: Fire icon on cheapest badge, improved metadata chips with Phosphor icons, social proof badges
+- **CategoryDetailScreen**: Custom segmented control, community info banner, consistent empty/error states
+- **ProductDetailSheet**: Explicit white background, custom drag handle, improved text contrast
 
 Database/RPC notes
 - price_records schema (expected): id (bigint, PK), product_name text, price numeric (stored final taxed total), original_price numeric, quantity integer default 1, price_type text default 'standard', discount_type text default 'none', discount_value numeric default 0, is_tax_included boolean, shop_name text, shop_lat double precision, shop_lng double precision, image_url text, category_tag text, is_best_price boolean, user_id uuid (required for user-scoped reads), created_at timestamptz default now().
@@ -19,6 +43,14 @@ Database/RPC notes
 Remaining
 - Confirm `user_id` column exists and is populated on price_records; set RLS policies to enforce user-only reads/writes if desired.
 - Re-run Supabase migrations in prod and verify guest-to-user linking + data migration end to end.
+- Deploy shopping list table/policies in Supabase and smoke test the new tab.
+- Bottom nav symmetry completed: 4th tab (Shopping List) added with centered FAB gap and 2-1-2 layout.
+
+Shopping list (new)
+- UI: Japanese-only Shopping List tab with add/toggle/delete, pull-to-refresh, and swipe-to-delete; guest users see login prompt.
+- Data: `shopping_list_items` table (id bigserial, user_id uuid FK auth.users, title text, is_done bool default false, created_at timestamptz default now()); RLS select/insert/update/delete scoped to auth.uid().
+- Service/model: `ShoppingListService` handles fetch/add/toggle/delete; `ShoppingListItem` model.
+- Status: Requires Supabase table + policies above; no other backend changes.
 
 Current Supabase schema snapshot (price_records)
 - id bigint

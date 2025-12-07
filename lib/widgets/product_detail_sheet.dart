@@ -132,30 +132,53 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
     final imageUrl = widget.record['image_url'] as String?;
     final userPrice = (widget.record['price'] as num?)?.toDouble();
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(productName, imageUrl),
-                const SizedBox(height: 16),
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Drag handle
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  _buildHeader(productName, imageUrl),
+                  const SizedBox(height: 20),
 
-                _buildYourRecordCard(userPrice),
-                const SizedBox(height: 16),
-                const Text(
-                  'コミュニティ情報',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                _buildCommunityInsight(userPrice),
-              ],
+                  _buildYourRecordCard(userPrice),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'コミュニティ情報',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Color(0xFF242424),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildCommunityInsight(userPrice),
+                  const SizedBox(height: 16),
+                ],
+              ),
             ),
           ),
         ),
@@ -179,11 +202,11 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                     placeholder: (_, __) =>
                         Container(color: Colors.grey.shade200),
                     errorWidget: (_, __, ___) =>
-                        const Icon(Icons.broken_image, size: 32),
+                        const Icon(Icons.broken_image, size: 32, color: Colors.grey),
                   )
                 : Container(
                     color: Colors.grey.shade200,
-                    child: const Icon(Icons.image, size: 32),
+                    child: const Icon(Icons.image, size: 32, color: Colors.grey),
                   ),
           ),
         ),
@@ -197,6 +220,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 20,
+                  color: Color(0xFF242424),
                 ),
               ),
               const SizedBox(height: 4),
@@ -225,10 +249,10 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade300),
       ),
       child: Column(
@@ -241,19 +265,32 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                 priceText,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 22,
+                  fontSize: 24,
+                  color: Color(0xFF242424),
                 ),
               ),
               if (relative.isNotEmpty)
-                Text(relative, style: TextStyle(color: Colors.grey.shade600)),
+                Text(
+                  relative,
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 14,
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.store, size: 18, color: Colors.grey),
+              Icon(Icons.store, size: 18, color: Colors.grey.shade600),
               const SizedBox(width: 6),
-              Text(shopName, style: const TextStyle(fontSize: 14)),
+              Text(
+                shopName,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF374151),
+                ),
+              ),
             ],
           ),
         ],

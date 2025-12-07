@@ -1,9 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import '../main.dart';
 import '../services/location_service.dart';
 import '../services/supabase_service.dart';
 import '../widgets/community_product_tile.dart';
@@ -48,28 +49,6 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         _communityFuture ??= _fetchCommunityRecords();
       }
     });
-  }
-
-  Widget _buildSegment(String label, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 18, color: Colors.black87),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   bool _isCommunityCacheFresh() {
@@ -158,55 +137,99 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final isCommunity = _selectedView == _CategoryView.community;
-    final bgColor = isCommunity ? Colors.blueGrey.shade50 : null;
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.categoryName)),
-      backgroundColor: bgColor,
+      backgroundColor: isCommunity
+          ? const Color(0xFFF0F9F7) // Light teal tint for community
+          : KurabeColors.background,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
+          widget.categoryName,
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            color: KurabeColors.textPrimary,
+          ),
+        ),
+        leading: IconButton(
+          icon: Icon(
+            PhosphorIcons.arrowLeft(PhosphorIconsStyle.bold),
+            color: KurabeColors.textPrimary,
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
       body: Column(
         children: [
+          // Segmented control
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
             child: Container(
-              width: double.infinity,
               decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(12),
+                color: KurabeColors.divider,
+                borderRadius: BorderRadius.circular(14),
               ),
               padding: const EdgeInsets.all(4),
-              child: CupertinoSlidingSegmentedControl<_CategoryView>(
-                groupValue: _selectedView,
-                backgroundColor: Colors.transparent,
-                thumbColor: Colors.white,
-                padding: EdgeInsets.zero,
-                children: {
-                  _CategoryView.mine: _buildSegment('自分の記録', Icons.person_outline),
-                  _CategoryView.community: _buildSegment('コミュニティ', Icons.public),
-                },
-                onValueChanged: (value) {
-                  if (value != null) _onToggle(value);
-                },
-              ),
-            ),
-          ),
-          if (isCommunity)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  Icon(Icons.location_on,
-                      color: Colors.blueGrey.shade700, size: 18),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      '近く5kmのコミュニティ投稿を表示',
-                      style: TextStyle(color: Colors.blueGrey.shade700),
-                    ),
+                  _buildSegmentButton(
+                    icon: PhosphorIcons.user(PhosphorIconsStyle.fill),
+                    label: '自分の記録',
+                    isSelected: _selectedView == _CategoryView.mine,
+                    onTap: () => _onToggle(_CategoryView.mine),
+                  ),
+                  const SizedBox(width: 4),
+                  _buildSegmentButton(
+                    icon: PhosphorIcons.usersThree(PhosphorIconsStyle.fill),
+                    label: 'コミュニティ',
+                    isSelected: _selectedView == _CategoryView.community,
+                    onTap: () => _onToggle(_CategoryView.community),
                   ),
                 ],
               ),
             ),
+          ),
+
+          // Community info banner
+          if (isCommunity)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: KurabeColors.primary.withAlpha(26),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: KurabeColors.primary.withAlpha(51),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      PhosphorIcons.mapPin(PhosphorIconsStyle.fill),
+                      color: KurabeColors.primary,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '近く5kmのコミュニティ投稿を表示',
+                        style: TextStyle(
+                          color: KurabeColors.primary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           const SizedBox(height: 8),
+
+          // Content
           Expanded(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
@@ -220,23 +243,84 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     );
   }
 
+  Widget _buildSegmentButton({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(13),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: isSelected
+                    ? KurabeColors.primary
+                    : KurabeColors.textTertiary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected
+                      ? KurabeColors.textPrimary
+                      : KurabeColors.textTertiary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMyRecords() {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _myRecordsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: KurabeColors.primary,
+            ),
+          );
         }
         if (snapshot.hasError) {
-          return Center(child: Text('エラー: ${snapshot.error}'));
+          return _buildErrorState('${snapshot.error}');
         }
         final records = snapshot.data ?? [];
         if (records.isEmpty) {
-          return const Center(child: Text('このカテゴリの履歴はありません'));
+          return _buildEmptyState(
+            icon: PhosphorIcons.folder(PhosphorIconsStyle.duotone),
+            message: 'このカテゴリの履歴はありません',
+          );
         }
         return ListView.builder(
           key: const ValueKey('mine'),
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           itemCount: records.length,
           itemBuilder: (context, index) {
             return CommunityProductTile(record: records[index]);
@@ -249,37 +333,19 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   Widget _buildCommunityRecords() {
     _communityFuture ??= _fetchCommunityRecords();
     if (_guestBlocked) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.lock, size: 32, color: Colors.grey),
-              SizedBox(height: 12),
-              Text(
-                'コミュニティ情報は登録ユーザーのみ利用できます',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ),
+      return _buildEmptyState(
+        icon: PhosphorIcons.lock(PhosphorIconsStyle.duotone),
+        message: 'コミュニティ情報は\n登録ユーザーのみ利用できます',
       );
     }
     if (_locationError != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            _locationError!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-        ),
+      return _buildEmptyState(
+        icon: PhosphorIcons.prohibit(PhosphorIconsStyle.duotone),
+        message: _locationError!,
       );
     }
     return RefreshIndicator(
+      color: KurabeColors.primary,
       onRefresh: () async {
         setState(() {
           _communityCache = null;
@@ -292,25 +358,35 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         future: _communityFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: KurabeColors.primary,
+              ),
+            );
           }
           if (snapshot.hasError) {
-            return Center(child: Text('エラー: ${snapshot.error}'));
+            return _buildErrorState('${snapshot.error}');
           }
           final records = snapshot.data ?? [];
           if (records.isEmpty) {
-            return const Center(child: Text('近くの投稿が見つかりませんでした'));
+            return _buildEmptyState(
+              icon: PhosphorIcons.magnifyingGlass(PhosphorIconsStyle.duotone),
+              message: '近くの投稿が見つかりませんでした',
+            );
           }
           final minUnitPriceByName = _findMinUnitPriceByName(records);
           return ListView.builder(
             key: const ValueKey('community'),
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
             itemCount: records.length,
             itemBuilder: (context, index) {
               final record = records[index];
               final unitPrice = _computeUnitPrice(record);
-              final productName =
-                  (record['product_name'] as String?)?.trim().toLowerCase() ?? '';
+              final productName = (record['product_name'] as String?)
+                      ?.trim()
+                      .toLowerCase() ??
+                  '';
               final minForName = minUnitPriceByName[productName];
               final isCheapest = unitPrice != null &&
                   minForName != null &&
@@ -322,6 +398,77 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState({required IconData icon, required String message}) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: KurabeColors.textTertiary.withAlpha(26),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 48,
+                color: KurabeColors.textTertiary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+                color: KurabeColors.textSecondary,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: KurabeColors.error.withAlpha(26),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                PhosphorIcons.warningCircle(PhosphorIconsStyle.duotone),
+                size: 48,
+                color: KurabeColors.error,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'エラー: $error',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: KurabeColors.error,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

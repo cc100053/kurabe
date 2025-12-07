@@ -4,8 +4,10 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../main.dart';
 import '../../services/supabase_service.dart';
 
 class ProfileTab extends StatefulWidget {
@@ -28,6 +30,173 @@ class _ProfileTabState extends State<ProfileTab> {
     _statsFuture = _fetchProfileStats();
   }
 
+  @override
+  Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final isGuest = _supabaseService.isGuest;
+    final emailText = user?.email ?? 'ゲストユーザー';
+
+    return Scaffold(
+      backgroundColor: KurabeColors.background,
+      body: CustomScrollView(
+        slivers: [
+          // Premium header with gradient
+          SliverToBoxAdapter(
+            child: _buildHeader(user, isGuest, emailText),
+          ),
+
+          // Stats section
+          SliverToBoxAdapter(
+            child: _buildStatsSection(),
+          ),
+
+          // Settings menu
+          SliverToBoxAdapter(
+            child: _buildSettingsSection(isGuest),
+          ),
+
+          // Status message
+          if (_statusMessage != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _statusMessage!.contains('失敗')
+                        ? KurabeColors.error.withAlpha(26)
+                        : KurabeColors.success.withAlpha(26),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _statusMessage!.contains('失敗')
+                          ? KurabeColors.error.withAlpha(77)
+                          : KurabeColors.success.withAlpha(77),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _statusMessage!.contains('失敗')
+                            ? PhosphorIcons.warningCircle(PhosphorIconsStyle.fill)
+                            : PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
+                        color: _statusMessage!.contains('失敗')
+                            ? KurabeColors.error
+                            : KurabeColors.success,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _statusMessage!,
+                          style: TextStyle(
+                            color: _statusMessage!.contains('失敗')
+                                ? KurabeColors.error
+                                : KurabeColors.success,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Bottom spacing
+          const SliverToBoxAdapter(child: SizedBox(height: 120)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(User? user, bool isGuest, String emailText) {
+    final displayName = isGuest
+        ? 'ゲストユーザー'
+        : (user?.userMetadata?['name'] as String?) ?? emailText;
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            KurabeColors.primary,
+            KurabeColors.primaryLight,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+          child: Column(
+            children: [
+              // Avatar section
+              _buildAvatar(user),
+              const SizedBox(height: 20),
+
+              // Name with edit button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      displayName,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: -0.5,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (!isGuest) ...[
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: _isUpdatingProfile ? null : _changeName,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withAlpha(51),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          PhosphorIcons.pencilSimple(PhosphorIconsStyle.bold),
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Email
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(26),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  emailText,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withAlpha(204),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildAvatar(User? user) {
     final avatarUrl = user?.userMetadata?['avatar_url'] as String?;
     final initials = (user?.userMetadata?['name'] as String?)
@@ -35,46 +204,86 @@ class _ProfileTabState extends State<ProfileTab> {
             .split(RegExp(r'\s+'))
             .map((part) => part.isNotEmpty ? part.characters.first : '')
             .take(2)
-            .join()
-        ?? (user?.email?.isNotEmpty == true ? user!.email!.characters.first : 'ゲ');
-
-    final avatar = avatarUrl != null
-        ? ClipOval(
-            child: Image.network(
-              avatarUrl,
-              width: 100,
-              height: 100,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _fallbackAvatar(initials),
-            ),
-          )
-        : _fallbackAvatar(initials);
+            .join() ??
+        (user?.email?.isNotEmpty == true
+            ? user!.email!.characters.first.toUpperCase()
+            : 'ゲ');
 
     return Column(
       children: [
-        Stack(
-          alignment: Alignment.bottomRight,
-          children: [
-            avatar,
-            if (!_supabaseService.isGuest)
-              IconButton(
-                icon: const Icon(Icons.edit, color: Colors.white),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black54,
-                  minimumSize: const Size(32, 32),
-                  padding: EdgeInsets.zero,
+        GestureDetector(
+          onTap: !_supabaseService.isGuest && !_isUpdatingProfile
+              ? _changeAvatar
+              : null,
+          child: Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              // Avatar ring
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withAlpha(102),
+                    width: 3,
+                  ),
                 ),
-                onPressed: _isUpdatingProfile ? null : _changeAvatar,
+                child: ClipOval(
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withAlpha(51),
+                      shape: BoxShape.circle,
+                    ),
+                    child: avatarUrl != null
+                        ? Image.network(
+                            avatarUrl,
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                _fallbackAvatar(initials),
+                          )
+                        : _fallbackAvatar(initials),
+                  ),
+                ),
               ),
-          ],
+
+              // Edit badge
+              if (!_supabaseService.isGuest)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(26),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    PhosphorIcons.camera(PhosphorIconsStyle.fill),
+                    size: 18,
+                    color: KurabeColors.primary,
+                  ),
+                ),
+            ],
+          ),
         ),
         if (_isUpdatingProfile)
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
             child: SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white.withAlpha(179),
+              ),
             ),
           ),
       ],
@@ -82,223 +291,267 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   Widget _fallbackAvatar(String initials) {
-    return CircleAvatar(
-      radius: 50,
-      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-      child: Text(
-        initials.isNotEmpty ? initials.toUpperCase() : 'ゲ',
-        style: TextStyle(
-          fontSize: 40,
-          fontWeight: FontWeight.bold,
-          color: Theme.of(context).colorScheme.primary,
+    return Container(
+      width: 100,
+      height: 100,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withAlpha(51),
+            Colors.white.withAlpha(26),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        shape: BoxShape.circle,
       ),
-    );
-  }
-
-  Widget _buildNameRow(User? user, bool isGuest, String emailText) {
-    final displayName = isGuest
-        ? 'ゲストユーザー'
-        : (user?.userMetadata?['name'] as String?) ??
-            emailText;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          displayName,
+      child: Center(
+        child: Text(
+          initials.isNotEmpty ? initials.toUpperCase() : 'ゲ',
           style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1A1A1A),
+            fontSize: 36,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
           ),
         ),
-        if (!isGuest)
-          IconButton(
-            icon: const Icon(Icons.edit, size: 18),
-            onPressed: _isUpdatingProfile ? null : _changeName,
-          ),
-      ],
+      ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
-    final isGuest = _supabaseService.isGuest;
-    final emailText = user?.email ?? 'ゲストユーザー';
-    
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
-      appBar: AppBar(
-        title: const Text('プロフィール'),
-        backgroundColor: Colors.transparent, 
-        elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            // Avatar & Name
-            _buildAvatar(user),
-            const SizedBox(height: 16),
-            _buildNameRow(user, isGuest, emailText),
-            Text(
-              emailText,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
+  Widget _buildStatsSection() {
+    return Transform.translate(
+      offset: const Offset(0, 20),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(13),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
               ),
-            ),
-            
-            const SizedBox(height: 32),
-            
-            // Stats Row
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: FutureBuilder<Map<String, dynamic>>(
-                future: _statsFuture,
-                builder: (context, snapshot) {
-                  final loading = snapshot.connectionState == ConnectionState.waiting;
-                  final stats = snapshot.data ?? {};
-                  final scans = stats['count'] as int? ?? 0;
-                  final activeDays = stats['activeDays'] as int?;
-                  final joinDate = stats['joinDate'] as DateTime?;
-                  final level = _levelLabel(scans);
-                  final activeDaysText = activeDays != null
-                      ? '$activeDays 日'
-                      : (joinDate != null
-                          ? '参加日 ${_formatDate(joinDate)}'
-                          : 'ー');
-                  return Row(
-                    children: [
-                      _buildStatCard(
-                        'スキャン',
-                        loading ? null : '$scans',
-                        Icons.qr_code_scanner,
-                      ),
-                      const SizedBox(width: 12),
-                      _buildStatCard(
-                        'レベル',
-                        loading ? null : level,
-                        Icons.leaderboard_outlined,
-                      ),
-                      const SizedBox(width: 12),
-                      _buildStatCard(
-                        '活動日数',
-                        loading ? null : activeDaysText,
-                        Icons.calendar_today,
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
+            ],
+          ),
+          child: FutureBuilder<Map<String, dynamic>>(
+            future: _statsFuture,
+            builder: (context, snapshot) {
+              final loading =
+                  snapshot.connectionState == ConnectionState.waiting;
+              final stats = snapshot.data ?? {};
+              final scans = stats['count'] as int? ?? 0;
+              final activeDays = stats['activeDays'] as int?;
+              final joinDate = stats['joinDate'] as DateTime?;
+              final level = _levelLabel(scans);
+              final activeDaysText = activeDays != null
+                  ? '$activeDays'
+                  : (joinDate != null ? '1' : '-');
 
-            const SizedBox(height: 32),
-
-            // Settings Menu
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
+              return Row(
                 children: [
-                  if (isGuest) ...[
-                    _buildSettingsTile(
-                      icon: Icons.login,
-                      title: 'Googleで連携',
-                      onTap: _isLoading ? null : () => _linkWithOAuth(OAuthProvider.google),
-                      isDestructive: false,
-                    ),
-                    if (Platform.isIOS)
-                      _buildSettingsTile(
-                        icon: Icons.apple,
-                        title: 'Appleで連携',
-                        onTap: _isLoading ? null : () => _linkWithOAuth(OAuthProvider.apple),
-                      ),
-                    _buildSettingsTile(
-                      icon: Icons.email_outlined,
-                      title: 'メールで連携',
-                      onTap: _isLoading ? null : _showEmailLinkDialog,
-                    ),
-                    const SizedBox(height: 20),
-                    _buildSettingsTile(
-                      icon: Icons.delete_forever_outlined,
-                      title: 'ゲストデータを削除',
-                      onTap: _isLoading ? null : _confirmGuestReset,
-                      isDestructive: true,
-                    ),
-                  ] else ...[
-                    _buildSettingsTile(
-                      icon: Icons.logout,
-                      title: 'ログアウト',
-                      onTap: _isLoading ? null : _handleSignOut,
-                      isDestructive: true,
-                    ),
-                  ],
+                  _buildStatItem(
+                    icon: PhosphorIcons.scan(PhosphorIconsStyle.fill),
+                    value: loading ? null : '$scans',
+                    label: 'スキャン',
+                    color: KurabeColors.primary,
+                  ),
+                  _buildDivider(),
+                  _buildStatItem(
+                    icon: PhosphorIcons.medal(PhosphorIconsStyle.fill),
+                    value: loading ? null : level,
+                    label: 'レベル',
+                    color: KurabeColors.accent,
+                  ),
+                  _buildDivider(),
+                  _buildStatItem(
+                    icon: PhosphorIcons.calendarCheck(PhosphorIconsStyle.fill),
+                    value: loading ? null : activeDaysText,
+                    label: '活動日数',
+                    color: KurabeColors.success,
+                  ),
                 ],
-              ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem({
+    required IconData icon,
+    required String? value,
+    required String label,
+    required Color color,
+  }) {
+    return Expanded(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withAlpha(26),
+              shape: BoxShape.circle,
             ),
-            
-            if (_statusMessage != null)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  _statusMessage!,
-                  style: TextStyle(
-                    color: _statusMessage!.contains('失敗') ? Colors.red : Colors.green,
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(height: 12),
+          value == null
+              ? SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: color,
+                  ),
+                )
+              : Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: KurabeColors.textPrimary,
+                    letterSpacing: -0.5,
                   ),
                 ),
-              ),
-            const SizedBox(height: 100),
-          ],
-        ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: KurabeColors.textTertiary,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildStatCard(String label, String? value, IconData icon) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha((0.04 * 255).round()),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: Theme.of(context).colorScheme.primary, size: 28),
-            const SizedBox(height: 8),
-            value == null
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                  ),
-            const SizedBox(height: 4),
-            Text(
-              label,
+  Widget _buildDivider() {
+    return Container(
+      width: 1,
+      height: 60,
+      color: KurabeColors.divider,
+    );
+  }
+
+  Widget _buildSettingsSection(bool isGuest) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section header
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 12),
+            child: Text(
+              'アカウント',
               style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: KurabeColors.textTertiary,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+
+          // Settings tiles
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(8),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                if (isGuest) ...[
+                  _buildSettingsTile(
+                    icon: PhosphorIcons.googleLogo(PhosphorIconsStyle.fill),
+                    title: 'Googleで連携',
+                    subtitle: 'データを安全に保存',
+                    onTap: _isLoading
+                        ? null
+                        : () => _linkWithOAuth(OAuthProvider.google),
+                    iconColor: const Color(0xFFDB4437),
+                  ),
+                  _buildTileDivider(),
+                  if (Platform.isIOS) ...[
+                    _buildSettingsTile(
+                      icon: PhosphorIcons.appleLogo(PhosphorIconsStyle.fill),
+                      title: 'Appleで連携',
+                      subtitle: 'Face IDで簡単ログイン',
+                      onTap: _isLoading
+                          ? null
+                          : () => _linkWithOAuth(OAuthProvider.apple),
+                      iconColor: Colors.black,
+                    ),
+                    _buildTileDivider(),
+                  ],
+                  _buildSettingsTile(
+                    icon: PhosphorIcons.envelope(PhosphorIconsStyle.fill),
+                    title: 'メールで連携',
+                    subtitle: 'メールアドレスで登録',
+                    onTap: _isLoading ? null : _showEmailLinkDialog,
+                    iconColor: KurabeColors.primary,
+                  ),
+                ] else ...[
+                  _buildSettingsTile(
+                    icon: PhosphorIcons.signOut(PhosphorIconsStyle.fill),
+                    title: 'ログアウト',
+                    subtitle: 'アカウントからサインアウト',
+                    onTap: _isLoading ? null : _confirmSignOut,
+                    iconColor: KurabeColors.error,
+                    isDestructive: true,
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Destructive actions for guests
+          if (isGuest) ...[
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 12),
+              child: Text(
+                'データ管理',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: KurabeColors.textTertiary,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: KurabeColors.error.withAlpha(51),
+                ),
+              ),
+              child: _buildSettingsTile(
+                icon: PhosphorIcons.trash(PhosphorIconsStyle.fill),
+                title: 'ゲストデータを削除',
+                subtitle: 'すべての記録を消去します',
+                onTap: _isLoading ? null : _confirmGuestReset,
+                iconColor: KurabeColors.error,
+                isDestructive: true,
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -306,42 +559,104 @@ class _ProfileTabState extends State<ProfileTab> {
   Widget _buildSettingsTile({
     required IconData icon,
     required String title,
+    required String subtitle,
     required VoidCallback? onTap,
+    required Color iconColor,
     bool isDestructive = false,
   }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: ListTile(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: isDestructive ? const Color(0xFFFFEBEE) : const Color(0xFFF0F9F8), // Light mint or red
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            icon,
-            color: isDestructive ? Colors.red : Theme.of(context).colorScheme.primary,
-            size: 22,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: iconColor.withAlpha(26),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: isDestructive
+                            ? KurabeColors.error
+                            : KurabeColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: KurabeColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                PhosphorIcons.caretRight(PhosphorIconsStyle.bold),
+                color: KurabeColors.textTertiary,
+                size: 18,
+              ),
+            ],
           ),
         ),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            color: isDestructive ? Colors.red : const Color(0xFF1A1A1A),
-          ),
-        ),
-        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
       ),
     );
+  }
+
+  Widget _buildTileDivider() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 62),
+      child: Container(
+        height: 1,
+        color: KurabeColors.divider,
+      ),
+    );
+  }
+
+  // ========== Logic Methods (unchanged) ==========
+
+  Future<void> _confirmSignOut() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ログアウトしますか？'),
+        content: const Text('サインアウトしても保存済みの記録は残ります。再度利用するにはログインが必要です。'),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: KurabeColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('ログアウト'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('キャンセル'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _handleSignOut();
+    }
   }
 
   Future<void> _handleSignOut() async {
@@ -468,7 +783,7 @@ class _ProfileTabState extends State<ProfileTab> {
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: KurabeColors.error,
               foregroundColor: Colors.white,
             ),
             child: const Text('削除する'),
@@ -522,8 +837,9 @@ class _ProfileTabState extends State<ProfileTab> {
 
       final total = rows.length;
 
-      DateTime? joinDate =
-          userCreatedRaw != null ? DateTime.tryParse(userCreatedRaw)?.toLocal() : null;
+      DateTime? joinDate = userCreatedRaw != null
+          ? DateTime.tryParse(userCreatedRaw)?.toLocal()
+          : null;
       final createdAtList = rows
           .whereType<Map>()
           .map((e) => e['created_at']?.toString())
@@ -566,16 +882,13 @@ class _ProfileTabState extends State<ProfileTab> {
     return '見習';
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.year}/${date.month}/${date.day}';
-  }
-
   Future<void> _changeAvatar() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
     const avatarBucket = 'avatars';
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 800);
+    final picked =
+        await picker.pickImage(source: ImageSource.gallery, maxWidth: 800);
     if (picked == null) return;
     final originalBytes = await picked.readAsBytes();
     if (originalBytes.lengthInBytes > 15 * 1024 * 1024) {
@@ -589,13 +902,17 @@ class _ProfileTabState extends State<ProfileTab> {
       _statusMessage = null;
     });
     try {
-      final path = 'avatars/${user.id}_${DateTime.now().millisecondsSinceEpoch}${picked.name.contains('.') ? picked.name.substring(picked.name.lastIndexOf('.')) : '.jpg'}';
+      final path =
+          'avatars/${user.id}_${DateTime.now().millisecondsSinceEpoch}${picked.name.contains('.') ? picked.name.substring(picked.name.lastIndexOf('.')) : '.jpg'}';
       await Supabase.instance.client.storage.from(avatarBucket).uploadBinary(
             path,
             adjustedBytes,
-            fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg'),
+            fileOptions:
+                const FileOptions(upsert: true, contentType: 'image/jpeg'),
           );
-      final publicUrl = Supabase.instance.client.storage.from(avatarBucket).getPublicUrl(path);
+      final publicUrl = Supabase.instance.client.storage
+          .from(avatarBucket)
+          .getPublicUrl(path);
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(data: {'avatar_url': publicUrl}),
       );
@@ -714,8 +1031,9 @@ class _ProfileTabState extends State<ProfileTab> {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    final cropped = await _cropCenteredSquare(bytes, scale, offset);
-                    if (!mounted) return;
+                    final cropped =
+                        await _cropCenteredSquare(bytes, scale, offset);
+                    if (!context.mounted) return;
                     Navigator.of(context).pop(cropped);
                   },
                   child: const Text('保存'),
@@ -728,7 +1046,8 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 
-  Future<Uint8List> _cropCenteredSquare(Uint8List bytes, double scale, Offset offset) async {
+  Future<Uint8List> _cropCenteredSquare(
+      Uint8List bytes, double scale, Offset offset) async {
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
     final image = frame.image;
@@ -738,7 +1057,6 @@ class _ProfileTabState extends State<ProfileTab> {
     final paint = Paint();
     final dstSize = size.toDouble();
 
-    // Center crop with zoom (scale)
     canvas.translate(dstSize / 2 + offset.dx, dstSize / 2 + offset.dy);
     canvas.scale(scale);
     canvas.translate(-image.width / 2, -image.height / 2);

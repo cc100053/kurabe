@@ -1,7 +1,9 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import '../main.dart';
 import 'product_detail_sheet.dart';
 
 /// A premium tile widget for displaying community-sourced product price data.
@@ -21,7 +23,6 @@ class CommunityProductTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     // Extract data from record
@@ -32,150 +33,169 @@ class CommunityProductTile extends StatelessWidget {
     final confirmationCount =
         (record['confirmation_count'] as num?)?.toInt() ?? 0;
     final imageUrl = record['image_url'] as String?;
-    
+
     // Calculate unit price
     final unitPrice = _calculateUnitPrice(record);
-    
-    // Check if tax is included (handle both bool and int types)
+
+    // Check if tax is included
     final taxIncludedValue = record['is_tax_included'];
-    final isTaxIncluded = taxIncludedValue is bool 
-        ? taxIncludedValue 
+    final isTaxIncluded = taxIncludedValue is bool
+        ? taxIncludedValue
         : (taxIncludedValue is num ? taxIncludedValue.toInt() == 1 : false);
-    
+
     // Calculate time ago
     final timeAgo = _calculateTimeAgo(record);
 
-    return Card(
-      elevation: 0,
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
+      decoration: BoxDecoration(
+        color: KurabeColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
           color: isCheapest
-              ? const Color(0xFFFF3B30).withAlpha((0.3 * 255).round())
-              : colorScheme.outlineVariant,
+              ? KurabeColors.error.withAlpha(77)
+              : KurabeColors.border,
           width: isCheapest ? 1.5 : 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: isCheapest
+                ? KurabeColors.error.withAlpha(20)
+                : Colors.black.withAlpha(8),
+            blurRadius: isCheapest ? 16 : 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: InkWell(
-        onTap: onTap ??
-            () {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                builder: (_) => ProductDetailSheet(record: record),
-              );
-            },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Product Image
-              _buildProductImage(imageUrl),
-              const SizedBox(width: 14),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap ??
+              () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  showDragHandle: false,
+                  builder: (_) => ProductDetailSheet(record: record),
+                );
+              },
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Product Image
+                _buildProductImage(imageUrl),
+                const SizedBox(width: 14),
 
-              // Main Content
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Product Name Row with Cheapest Badge
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _buildProductName(productName, textTheme),
-                        ),
-                        if (isCheapest) ...[
-                          const SizedBox(width: 8),
-                          _buildCheapestBadge(),
+                // Main Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Product Name Row with Cheapest Badge
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _buildProductName(productName, textTheme),
+                          ),
+                          if (isCheapest) ...[
+                            const SizedBox(width: 8),
+                            _buildCheapestBadge(),
+                          ],
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 10),
+                      ),
+                      const SizedBox(height: 10),
 
-                    // Price Hero Section
-                    if (price != null)
-                      _buildPriceSection(
-                        price,
-                        unitPrice,
-                        isCheapest,
-                        isTaxIncluded,
+                      // Price Hero Section
+                      if (price != null)
+                        _buildPriceSection(
+                          price,
+                          unitPrice,
+                          isCheapest,
+                          isTaxIncluded,
+                          textTheme,
+                        ),
+                      const SizedBox(height: 12),
+
+                      // Metadata Row
+                      _buildMetadataRow(
+                        shopName,
+                        timeAgo,
+                        confirmationCount,
                         textTheme,
                       ),
-                    const SizedBox(height: 12),
-
-                    // Metadata Row (Shop + Time + Social Proof)
-                    _buildMetadataRow(
-                      shopName,
-                      timeAgo,
-                      confirmationCount,
-                      textTheme,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  /// Product image with rounded corners and error handling
   Widget _buildProductImage(String? imageUrl) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        width: 80,
-        height: 80,
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(14),
-        ),
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        color: KurabeColors.divider,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(8),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
         child: imageUrl != null
             ? CachedNetworkImage(
                 imageUrl: imageUrl,
                 fit: BoxFit.cover,
                 placeholder: (context, _) => Container(
-                  color: Colors.grey.shade200,
+                  color: KurabeColors.divider,
                   child: Center(
                     child: SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.grey[400],
+                        color: KurabeColors.textTertiary,
                       ),
                     ),
                   ),
                 ),
                 errorWidget: (context, url, error) {
                   return Container(
-                    color: Colors.grey[200],
+                    color: KurabeColors.divider,
                     child: Icon(
-                      Icons.shopping_bag_outlined,
+                      PhosphorIcons.shoppingBag(PhosphorIconsStyle.duotone),
                       size: 32,
-                      color: Colors.grey[400],
+                      color: KurabeColors.textTertiary,
                     ),
                   );
                 },
               )
             : Container(
-                color: Colors.grey[200],
+                color: KurabeColors.divider,
                 child: Icon(
-                  Icons.image_not_supported_outlined,
+                  PhosphorIcons.image(PhosphorIconsStyle.duotone),
                   size: 32,
-                  color: Colors.grey[400],
+                  color: KurabeColors.textTertiary,
                 ),
               ),
       ),
     );
   }
 
-  /// Product name with 2-line ellipsis
   Widget _buildProductName(String productName, TextTheme textTheme) {
     return Text(
       productName,
@@ -184,13 +204,12 @@ class CommunityProductTile extends StatelessWidget {
       style: textTheme.bodyLarge?.copyWith(
         fontWeight: FontWeight.w700,
         height: 1.3,
-        color: const Color(0xFF1A1A1A),
+        color: KurabeColors.textPrimary,
         letterSpacing: -0.2,
       ),
     );
   }
 
-  /// Elegant "最安" badge with gradient background
   Widget _buildCheapestBadge() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -203,27 +222,36 @@ class CommunityProductTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color:
-                const Color(0xFFFF3B30).withAlpha((0.3 * 255).round()),
-            blurRadius: 6,
+            color: const Color(0xFFFF3B30).withAlpha(77),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: const Text(
-        '最安',
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-          color: Colors.white,
-          letterSpacing: 0.5,
-          height: 1.0,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            PhosphorIcons.fire(PhosphorIconsStyle.fill),
+            size: 12,
+            color: Colors.white,
+          ),
+          const SizedBox(width: 4),
+          const Text(
+            '最安',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: 0.5,
+              height: 1.0,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  /// Hero price section with unit price and tax badge
   Widget _buildPriceSection(
     int price,
     String unitPrice,
@@ -235,53 +263,64 @@ class CommunityProductTile extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
-        // Main Price (Hero)
+        // Currency symbol
         Text(
-          '¥${_formatPrice(price)}',
-          style: textTheme.headlineMedium?.copyWith(
+          '¥',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: isCheapest ? KurabeColors.error : KurabeColors.textPrimary,
+            height: 1.0,
+          ),
+        ),
+        // Main Price
+        Text(
+          _formatPrice(price),
+          style: TextStyle(
+            fontSize: 26,
             fontWeight: FontWeight.w900,
-            color: isCheapest
-                ? const Color(0xFFFF3B30)
-                : const Color(0xFF1A1A1A),
+            color: isCheapest ? KurabeColors.error : KurabeColors.textPrimary,
             letterSpacing: -1.0,
             height: 1.0,
           ),
         ),
-        const SizedBox(width: 6),
-        
+        const SizedBox(width: 8),
+
         // Tax Included Badge
         if (isTaxIncluded)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(4),
+              color: KurabeColors.divider,
+              borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               '税込',
               style: TextStyle(
                 fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[700],
+                fontWeight: FontWeight.w700,
+                color: KurabeColors.textSecondary,
                 height: 1.0,
               ),
             ),
           ),
-        const SizedBox(width: 8),
 
-        // Unit Price (Supporting)
-        Text(
-          unitPrice,
-          style: textTheme.bodyMedium?.copyWith(
-            color: Colors.grey[600],
-            fontWeight: FontWeight.w600,
+        // Unit Price
+        if (unitPrice.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          Text(
+            unitPrice,
+            style: textTheme.bodyMedium?.copyWith(
+              color: KurabeColors.textTertiary,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
 
-  /// Metadata row with shop, time, and social proof
   Widget _buildMetadataRow(
     String shopName,
     String timeAgo,
@@ -289,31 +328,31 @@ class CommunityProductTile extends StatelessWidget {
     TextTheme textTheme,
   ) {
     return Wrap(
-      spacing: 8,
-      runSpacing: 6,
+      spacing: 12,
+      runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        // Shop Icon + Name
+        // Shop
         _buildMetadataChip(
-          icon: Icons.store_outlined,
+          icon: PhosphorIcons.storefront(PhosphorIconsStyle.fill),
           label: shopName,
           textTheme: textTheme,
         ),
 
         // Time Ago
-        _buildMetadataChip(
-          icon: Icons.access_time_outlined,
-          label: timeAgo,
-          textTheme: textTheme,
-        ),
+        if (timeAgo.isNotEmpty)
+          _buildMetadataChip(
+            icon: PhosphorIcons.clock(PhosphorIconsStyle.fill),
+            label: timeAgo,
+            textTheme: textTheme,
+          ),
 
-        // Social Proof (if count > 1)
+        // Social Proof
         if (confirmationCount > 1) _buildSocialProofChip(confirmationCount),
       ],
     );
   }
 
-  /// Metadata chip with icon and label
   Widget _buildMetadataChip({
     required IconData icon,
     required String label,
@@ -324,8 +363,8 @@ class CommunityProductTile extends StatelessWidget {
       children: [
         Icon(
           icon,
-          size: 15,
-          color: Colors.grey[600],
+          size: 14,
+          color: KurabeColors.textTertiary,
         ),
         const SizedBox(width: 4),
         Flexible(
@@ -334,7 +373,7 @@ class CommunityProductTile extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: textTheme.bodySmall?.copyWith(
-              color: Colors.grey[700],
+              color: KurabeColors.textSecondary,
               fontWeight: FontWeight.w600,
               fontSize: 13,
             ),
@@ -344,33 +383,32 @@ class CommunityProductTile extends StatelessWidget {
     );
   }
 
-  /// Social proof chip with check icon and count
   Widget _buildSocialProofChip(int count) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF34C759).withAlpha((0.12 * 255).round()),
-        borderRadius: BorderRadius.circular(6),
+        color: KurabeColors.success.withAlpha(26),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: const Color(0xFF34C759).withAlpha((0.4 * 255).round()),
+          color: KurabeColors.success.withAlpha(77),
           width: 1,
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.check_circle,
+          Icon(
+            PhosphorIcons.checks(PhosphorIconsStyle.bold),
             size: 14,
-            color: Color(0xFF34C759),
+            color: KurabeColors.success,
           ),
           const SizedBox(width: 4),
           Text(
-            '$count',
+            '$count人確認',
             style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF34C759),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: KurabeColors.success,
               height: 1.0,
             ),
           ),
@@ -379,11 +417,10 @@ class CommunityProductTile extends StatelessWidget {
     );
   }
 
-  /// Calculate unit price string
   String _calculateUnitPrice(Map<String, dynamic> record) {
     final explicitUnitPrice = (record['unit_price'] as num?)?.toDouble();
     final unit = (record['unit'] as String?) ?? '';
-    
+
     if (explicitUnitPrice != null) {
       final unitLabel = unit.isNotEmpty ? unit : '単価';
       return '(¥${explicitUnitPrice.toStringAsFixed(1)}/$unitLabel)';
@@ -391,7 +428,7 @@ class CommunityProductTile extends StatelessWidget {
 
     final price = (record['price'] as num?)?.toDouble();
     final quantity = (record['quantity'] as num?)?.toDouble() ?? 1;
-    
+
     if (price != null && quantity > 0) {
       final unitPriceValue = price / quantity;
       final unitLabel = unit.isNotEmpty ? unit : '単価';
@@ -401,7 +438,6 @@ class CommunityProductTile extends StatelessWidget {
     return '';
   }
 
-  /// Calculate time ago string
   String _calculateTimeAgo(Map<String, dynamic> record) {
     final createdAtRaw = record['created_at'] as String?;
     if (createdAtRaw == null) return '';
@@ -425,7 +461,6 @@ class CommunityProductTile extends StatelessWidget {
     }
   }
 
-  /// Format price with thousands separator
   String _formatPrice(int price) {
     return price.toString().replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),

@@ -8,8 +8,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../constants/categories.dart';
+import '../constants/category_visuals.dart';
+import '../main.dart';
 import '../services/gemini_service.dart';
 import '../services/location_service.dart';
 import '../services/google_places_service.dart';
@@ -33,6 +36,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
   static const String _manualInputSentinel = '__manual_shop_input__';
   static final String _placesApiKey = dotenv.env['GOOGLE_PLACES_API_KEY'] ?? '';
 
+  bool _isCategorySheetOpen = false;
   final _productController = TextEditingController();
   final _originalPriceController = TextEditingController();
   final _quantityController = TextEditingController(text: '1');
@@ -1009,6 +1013,13 @@ class _AddEditScreenState extends State<AddEditScreen> {
                     _selectedDiscountType == _DiscountType.percentage,
                     _selectedDiscountType == _DiscountType.fixedAmount,
                   ],
+                  borderRadius: BorderRadius.circular(14),
+                  borderColor: KurabeColors.border,
+                  selectedBorderColor: KurabeColors.primary,
+                  selectedColor: Colors.white,
+                  color: KurabeColors.textSecondary,
+                  fillColor: KurabeColors.primary,
+                  constraints: const BoxConstraints(minHeight: 38, minWidth: 72),
                   onPressed: (index) {
                     setState(() {
                       _selectedDiscountType = switch (index) {
@@ -1050,19 +1061,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
             const SizedBox(height: 12),
             _buildPriceSummary(),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              key: ValueKey('category-${_selectedCategory ?? 'その他'}'),
-              initialValue: _selectedCategory ?? 'その他',
-              items: kCategories
-                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _selectedCategory = value);
-                }
-              },
-              decoration: const InputDecoration(labelText: 'カテゴリを選択'),
-            ),
+            _buildCategoryPicker(),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -1112,6 +1111,262 @@ class _AddEditScreenState extends State<AddEditScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCategoryPicker() {
+    final selected = _selectedCategory ?? 'その他';
+    final visual = kCategoryVisuals[selected];
+    final icon =
+        visual?.icon ?? PhosphorIcons.tagSimple(PhosphorIconsStyle.bold);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'カテゴリを選択',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: _showCategorySheet,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: KurabeColors.surfaceElevated,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: KurabeColors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(10),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  height: 38,
+                  width: 38,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: (visual?.color ?? KurabeColors.surface)
+                        .withAlpha(200),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 20,
+                    color: KurabeColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    selected,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _isCategorySheetOpen
+                      ? PhosphorIcons.caretUp(PhosphorIconsStyle.bold)
+                      : PhosphorIcons.caretDown(PhosphorIconsStyle.bold),
+                  color: KurabeColors.textSecondary,
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showCategorySheet() async {
+    setState(() => _isCategorySheetOpen = true);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      showDragHandle: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        final viewInsets = MediaQuery.of(context).viewInsets;
+        final viewPadding = MediaQuery.of(context).viewPadding;
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.85,
+          minChildSize: 0.6,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: 12,
+                  bottom: viewInsets.bottom + viewPadding.bottom + 12,
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: KurabeColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'カテゴリを選択',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: scrollController,
+                        child: _buildCategoryGridBody(
+                          onSelect: (name) {
+                            setState(() => _selectedCategory = name);
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (mounted) {
+      setState(() => _isCategorySheetOpen = false);
+    }
+  }
+
+  Widget _buildCategoryGridBody({required void Function(String) onSelect}) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: kCategories.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1.0,
+      ),
+      itemBuilder: (context, index) {
+        final name = kCategories[index];
+        final visual = kCategoryVisuals[name];
+        final icon =
+            visual?.icon ?? PhosphorIcons.tagSimple(PhosphorIconsStyle.bold);
+        final isSelected = _selectedCategory == name;
+
+        return GestureDetector(
+          onTap: () => onSelect(name),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              gradient: visual != null
+                  ? LinearGradient(
+                      colors: [
+                        visual.color,
+                        visual.gradientEnd,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : LinearGradient(
+                      colors: [
+                        KurabeColors.surface,
+                        KurabeColors.surfaceElevated,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSelected ? KurabeColors.primary : KurabeColors.border,
+                width: isSelected ? 1.4 : 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withAlpha(10),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        height: 34,
+                        width: 34,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withAlpha(220),
+                        ),
+                        child: Icon(
+                          icon,
+                          size: 18,
+                          color: KurabeColors.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        name,
+                        style: TextStyle(
+                          fontWeight:
+                              isSelected ? FontWeight.w800 : FontWeight.w700,
+                          color: KurabeColors.textPrimary,
+                          fontSize: 13,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                if (isSelected)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                      ),
+                      child: Icon(
+                        PhosphorIcons.check(PhosphorIconsStyle.bold),
+                        size: 14,
+                        color: KurabeColors.primary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

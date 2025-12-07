@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
+import '../../main.dart';
 import '../../widgets/community_product_tile.dart';
 
 class TimelineTab extends StatelessWidget {
@@ -19,51 +21,85 @@ class TimelineTab extends StatelessWidget {
             .order('created_at', ascending: false);
 
     return Scaffold(
+      backgroundColor: KurabeColors.background,
       body: CustomScrollView(
         slivers: [
+          // Premium Header
           SliverAppBar(
-            title: const Text('タイムライン'),
+            expandedHeight: 140,
             floating: true,
             snap: true,
-            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-            surfaceTintColor: Theme.of(context).scaffoldBackgroundColor,
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(60),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _getGreeting(),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[600],
+            backgroundColor: KurabeColors.background,
+            surfaceTintColor: Colors.transparent,
+            flexibleSpace: FlexibleSpaceBar(
+              background: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Greeting row with emoji
+                      Row(
+                        children: [
+                          Text(
+                            _getGreetingEmoji(),
+                            style: const TextStyle(fontSize: 24),
                           ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _getGreeting(),
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: KurabeColors.textSecondary,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Date with badge styling
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 8,
                         ),
-                        Text(
-                          DateFormat('yyyy年M月d日', 'ja_JP').format(DateTime.now()),
+                        decoration: BoxDecoration(
+                          color: KurabeColors.surfaceElevated,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha(8),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          DateFormat('yyyy年M月d日（E）', 'ja_JP').format(DateTime.now()),
                           style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1A1A1A),
-                            height: 1.2,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: KurabeColors.textPrimary,
                             letterSpacing: -0.5,
                           ),
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
+          
+          // Content
           if (stream == null)
-            const SliverFillRemaining(
-              child: Center(child: Text('タイムラインを見るにはログインしてください')),
+            SliverFillRemaining(
+              child: _buildEmptyState(
+                icon: PhosphorIcons.signIn(PhosphorIconsStyle.duotone),
+                title: 'ログインしてください',
+                subtitle: 'タイムラインを見るにはログインが必要です',
+              ),
             )
           else
             StreamBuilder<List<Map<String, dynamic>>>(
@@ -71,18 +107,32 @@ class TimelineTab extends StatelessWidget {
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return SliverFillRemaining(
-                    child: Center(child: Text('エラー: ${snapshot.error}')),
+                    child: _buildEmptyState(
+                      icon: PhosphorIcons.warningCircle(PhosphorIconsStyle.duotone),
+                      title: 'エラーが発生しました',
+                      subtitle: '${snapshot.error}',
+                    ),
                   );
                 }
                 if (!snapshot.hasData) {
                   return const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: KurabeColors.primary,
+                      ),
+                    ),
                   );
                 }
                 final records = snapshot.data!;
                 if (records.isEmpty) {
-                  return const SliverFillRemaining(
-                    child: Center(child: Text('まだ記録がありません')),
+                  return SliverFillRemaining(
+                    child: _buildEmptyState(
+                      icon: PhosphorIcons.scan(PhosphorIconsStyle.duotone),
+                      title: 'まだ記録がありません',
+                      subtitle: 'スキャンボタンで\n価格をスキャンしてみましょう',
+                      showAction: true,
+                    ),
                   );
                 }
 
@@ -92,19 +142,23 @@ class TimelineTab extends StatelessWidget {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final group = grouped[index];
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildDateHeader(group.dateLabel),
-                          ...group.records.map((record) => Padding(
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildDateHeader(context, group.dateLabel),
+                            ...group.records.map(
+                              (record) => Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16,
                                   vertical: 4,
                                 ),
                                 child: CommunityProductTile(record: record),
-                              )),
-                          const SizedBox(height: 16),
-                        ],
+                              ),
+                            ),
+                          ],
+                        ),
                       );
                     },
                     childCount: grouped.length,
@@ -112,7 +166,9 @@ class TimelineTab extends StatelessWidget {
                 );
               },
             ),
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          
+          // Bottom padding for FAB
+          const SliverToBoxAdapter(child: SizedBox(height: 120)),
         ],
       ),
     );
@@ -120,34 +176,142 @@ class TimelineTab extends StatelessWidget {
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
+    if (hour < 5) return 'こんばんは';
     if (hour < 12) return 'おはようございます';
     if (hour < 18) return 'こんにちは';
     return 'こんばんは';
   }
 
-  Widget _buildDateHeader(String dateLabel) {
+  String _getGreetingEmoji() {
+    final hour = DateTime.now().hour;
+    if (hour < 5) return '🌙';
+    if (hour < 12) return '☀️';
+    if (hour < 18) return '🌤️';
+    return '🌙';
+  }
+
+  Widget _buildDateHeader(BuildContext context, String dateLabel) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
       child: Row(
         children: [
           Container(
-            width: 4,
-            height: 16,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFF00AA90),
-              borderRadius: BorderRadius.circular(2),
+              gradient: LinearGradient(
+                colors: [
+                  KurabeColors.primary.withAlpha(26),
+                  KurabeColors.primaryLight.withAlpha(13),
+                ],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+              borderRadius: BorderRadius.circular(8),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            dateLabel,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF1A1A1A),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  PhosphorIcons.calendarBlank(PhosphorIconsStyle.fill),
+                  size: 16,
+                  color: KurabeColors.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  dateLabel,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: KurabeColors.primary,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    bool showAction = false,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: KurabeColors.primary.withAlpha(26),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 56,
+                color: KurabeColors.primary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: KurabeColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: KurabeColors.textSecondary,
+                height: 1.5,
+              ),
+            ),
+            if (showAction) ...[
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                  color: KurabeColors.primary.withAlpha(13),
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(
+                    color: KurabeColors.primary.withAlpha(26),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      PhosphorIcons.arrowDown(PhosphorIconsStyle.bold),
+                      size: 18,
+                      color: KurabeColors.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      '下のボタンをタップ',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: KurabeColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -161,9 +325,7 @@ class TimelineTab extends StatelessWidget {
       final key = _getDateLabel(date);
       groups.putIfAbsent(key, () => []).add(record);
     }
-    return groups.entries
-        .map((e) => _DateGroup(e.key, e.value))
-        .toList();
+    return groups.entries.map((e) => _DateGroup(e.key, e.value)).toList();
   }
 
   String _getDateLabel(DateTime date) {
@@ -174,7 +336,7 @@ class TimelineTab extends StatelessWidget {
 
     if (target == today) return '今日';
     if (target == yesterday) return '昨日';
-    return DateFormat('M/d').format(date);
+    return DateFormat('M月d日').format(date);
   }
 }
 
