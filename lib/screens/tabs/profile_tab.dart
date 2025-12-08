@@ -682,7 +682,10 @@ class _ProfileTabState extends State<ProfileTab> {
       _statusMessage = null;
     });
     try {
-      await Supabase.instance.client.auth.signInWithOAuth(provider);
+      await Supabase.instance.client.auth.signInWithOAuth(
+        provider,
+        redirectTo: 'io.supabase.flutter://login-callback/',
+      );
       if (!mounted) return;
       setState(
         () => _statusMessage = '連携用のブラウザを開きました。サインインを完了してください。',
@@ -802,19 +805,12 @@ class _ProfileTabState extends State<ProfileTab> {
       _statusMessage = null;
     });
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId != null) {
-        await Supabase.instance.client
-            .from('price_records')
-            .delete()
-            .eq('user_id', userId);
-      }
       await Supabase.instance.client.auth.signOut();
       if (!mounted) return;
-      setState(() => _statusMessage = 'ゲストデータを削除しました。');
+      setState(() => _statusMessage = 'ゲストとしてサインアウトしました。');
     } catch (e) {
       if (!mounted) return;
-      setState(() => _statusMessage = '削除に失敗しました: $e');
+      setState(() => _statusMessage = 'サインアウトに失敗しました: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

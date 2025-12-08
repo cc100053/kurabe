@@ -8,7 +8,7 @@
 PRODUCT_NAME = kurabe
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.kurabe
+PRODUCT_BUNDLE_IDENTIFIER = com.cc100053.kurabe
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2025 com.example. All rights reserved.
