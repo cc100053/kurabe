@@ -10,6 +10,7 @@ Premium, modern UI inspired by Airbnb, Headspace, and Japanese fintech apps (Pay
 - **Navigation**: Symmetric bottom nav with animated pill indicators, gradient FAB with layered shadows
 - **Iconography**: Phosphor Icons (navigation, categories), Lucide (beef), Material Symbols (bento)
 - **Shopping List**: Japanese-only tab with add/toggle/delete and Supabase sync
+- **Branding**: App/bundle ID `com.cc100053.kurabe`, custom icon and splash using `assets/images/icon_square.png`
 
 ## Features
 

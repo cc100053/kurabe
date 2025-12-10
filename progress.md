@@ -52,6 +52,10 @@ Shopping list (new)
 - Service/model: `ShoppingListService` handles fetch/add/toggle/delete; `ShoppingListItem` model.
 - Status: Requires Supabase table + policies above; no other backend changes.
 
+Branding/launch
+- App/bundle ID updated to `com.cc100053.kurabe` across Android/iOS/macOS/Linux.
+- App icon and splash configured to use `assets/images/icon_square.png` via flutter_launcher_icons and flutter_native_splash (run the generators locally).
+
 Current Supabase schema snapshot (price_records)
 - id bigint
 - created_at timestamptz default timezone('utc', now())

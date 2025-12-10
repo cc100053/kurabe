@@ -1,0 +1,7 @@
+flutter_native_splash:
+  color: "#FAF9F7"
+  image: assets/images/icon_square_ios_launch.png
+  android: false
+  ios: true
+  web: false
+  ios_content_mode: center

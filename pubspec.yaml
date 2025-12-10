@@ -83,7 +83,11 @@ flutter:
 
   assets:
     - .env
-    - assets/images/icon_square.png
+    - assets/images/icon_inside.png
+    - assets/images/icon_square_android.png
+    - assets/images/icon_square_android_launch.png
+    - assets/images/icon_square_ios.png
+    - assets/images/icon_square_ios_launch.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -119,14 +123,27 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/icon_square.png"
+  image_path_android: "assets/images/icon_square_android.png"
+  image_path_ios: "assets/images/icon_square_ios.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#3ECABB"
+  adaptive_icon_foreground: "assets/images/icon_square_android.png"
   remove_alpha_ios: true
 
 flutter_native_splash:
   color: "#FAF9F7"
-  image: assets/images/icon_square.png
+  image: assets/images/icon_square_android_launch.png
+  android: true
+  ios: false
   android_gravity: center
   ios_content_mode: center
   android_12:
-    image: assets/images/icon_square.png
+    image: assets/images/icon_square_android_launch.png
     icon_background_color: "#FAF9F7"
+
+flutter_native_splash-ios:
+  color: "#FAF9F7"
+  image: assets/images/icon_square_ios_launch.png
+  android: false
+  ios: true
+  ios_content_mode: scaleAspectFit

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter/widgets.dart';
 
 import 'providers/app_state.dart';
 import 'screens/main_scaffold.dart';
@@ -383,6 +384,13 @@ class KurabeApp extends StatelessWidget {
           stream: Supabase.instance.client.auth.onAuthStateChange,
           builder: (context, snapshot) {
             final session = Supabase.instance.client.auth.currentSession;
+            final isAnonymous = _isAnonymousSession(session);
+            if (isAnonymous) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                Supabase.instance.client.auth.signOut();
+              });
+              return const WelcomeScreen();
+            }
             if (session != null) {
               return const MainScaffold();
             }
@@ -392,4 +400,21 @@ class KurabeApp extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _isAnonymousSession(Session? session) {
+  final user = session?.user;
+  if (user == null) return false;
+  final appMeta = user.appMetadata;
+  final provider = appMeta['provider'];
+  if (provider is String && provider.toLowerCase() == 'anonymous') {
+    return true;
+  }
+  final providers = appMeta['providers'];
+  if (providers is List) {
+    final lower = providers.map((e) => e.toString().toLowerCase());
+    if (lower.contains('anonymous')) return true;
+  }
+  final metaFlag = (user.userMetadata ?? const {})['is_anonymous'];
+  return metaFlag is bool && metaFlag;
 }

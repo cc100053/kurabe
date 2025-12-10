@@ -17,7 +17,7 @@ class GeminiService {
   final GenerativeModel _model;
 
   // TODO: Scanning Logic - This method sends the image to Gemini to extract product details.
-  // The prompt below defines exactly what fields we look for (name, price, quantity, etc).
+  // The prompt below defines exactly what fields we look for (name, price, etc).
   Future<Map<String, dynamic>> analyzeImage(File imageFile) async {
     if (_apiKey.isEmpty) {
       throw StateError('GEMINI_API_KEY が設定されていません');
@@ -28,7 +28,7 @@ class GeminiService {
     const prompt = '''
 Analyze this image of a Japanese supermarket price tag.
 Extract the product name (ignore marketing fluff or pack counts) and the `raw_price` (the largest price printed on the tag).
-Look for `quantity` indicators (e.g., "3点", "3本", "3個", "pair") and default to 1 when uncertain.
+Do NOT infer quantity; always set "quantity" to 1 because the user will input the actual count manually.
 Look for discount stickers (e.g., "30% Off", "半額", "20円引") and extract the discount type and value.
 Classify `price_type`: "clearance" when discount stickers are present, "promo" for red promotional tags/ads, otherwise "standard".
 Classify the product into EXACTLY one of these 18 tags (Japanese text must match): [野菜, 果物, 精肉, 鮮魚, 惣菜, 卵, 乳製品, 豆腐・納豆・麺, パン, 米・穀物, 調味料, インスタント, 飲料, お酒, お菓子, 冷凍食品, 日用品, その他].
@@ -43,7 +43,7 @@ Return ONLY valid JSON with this structure:
 {
   "product_name": "String",
   "raw_price": 298,
-  "quantity": 3,
+  "quantity": 1,
   "discount_info": { "type": "percentage", "value": 30 },
   "price_type": "clearance",
   "category": "惣菜"

@@ -206,10 +206,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
         if (rawPrice is num) {
           _originalPriceController.text = rawPrice.round().toString();
         }
-        final quantity = result['quantity'];
-        if (quantity is num && quantity > 0) {
-          _quantityController.text = quantity.round().toString();
-        }
         final discountInfo = result['discount_info'];
         if (discountInfo is Map) {
           final type = discountInfo['type'];

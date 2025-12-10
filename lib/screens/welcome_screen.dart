@@ -61,7 +61,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(24),
                   child: Image.asset(
-                    'assets/images/icon_square.png',
+                    'assets/images/icon_inside.png',
                     width: 100,
                     height: 100,
                     fit: BoxFit.contain,
@@ -505,17 +505,32 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   Future<void> _signInWithGoogle() async {
     await _runAuthAction(() async {
-      await Supabase.instance.client.auth.signInWithOAuth(
-        OAuthProvider.google,
-        redirectTo: 'io.supabase.flutter://login-callback/',
-      );
+      final auth = Supabase.instance.client.auth;
+      final isAnon = _isAnonymousSession(auth.currentSession);
+      if (isAnon) {
+        await auth.linkIdentity(
+          OAuthProvider.google,
+          redirectTo: 'io.supabase.flutter://login-callback/',
+        );
+      } else {
+        await auth.signInWithOAuth(
+          OAuthProvider.google,
+          redirectTo: 'io.supabase.flutter://login-callback/',
+        );
+      }
       return null;
     });
   }
 
   Future<void> _signInWithApple() async {
     await _runAuthAction(() async {
-      await Supabase.instance.client.auth.signInWithOAuth(OAuthProvider.apple);
+      final auth = Supabase.instance.client.auth;
+      final isAnon = _isAnonymousSession(auth.currentSession);
+      if (isAnon) {
+        await auth.linkIdentity(OAuthProvider.apple);
+      } else {
+        await auth.signInWithOAuth(OAuthProvider.apple);
+      }
       return null;
     });
   }
@@ -525,6 +540,23 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       await Supabase.instance.client.auth.signInAnonymously();
       return 'ゲストとしてログインしました。';
     });
+  }
+
+  bool _isAnonymousSession(Session? session) {
+    final user = session?.user;
+    if (user == null) return false;
+    final appMeta = user.appMetadata;
+    final provider = appMeta['provider'];
+    if (provider is String && provider.toLowerCase() == 'anonymous') {
+      return true;
+    }
+    final providers = appMeta['providers'];
+    if (providers is List) {
+      final lower = providers.map((e) => e.toString().toLowerCase());
+      if (lower.contains('anonymous')) return true;
+    }
+    final metaFlag = (user.userMetadata ?? const {})['is_anonymous'];
+    return metaFlag is bool && metaFlag;
   }
 
   Future<void> _runAuthAction(Future<String?> Function() action) async {
