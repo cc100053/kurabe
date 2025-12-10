@@ -18,6 +18,9 @@ Future<void> main() async {
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    authOptions: const FlutterAuthClientOptions(
+      authFlowType: AuthFlowType.pkce,
+    ),
   );
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   runApp(const KurabeApp());
@@ -405,6 +408,7 @@ class KurabeApp extends StatelessWidget {
 bool _isAnonymousSession(Session? session) {
   final user = session?.user;
   if (user == null) return false;
+  if (user.isAnonymous) return true;
   final appMeta = user.appMetadata;
   final provider = appMeta['provider'];
   if (provider is String && provider.toLowerCase() == 'anonymous') {

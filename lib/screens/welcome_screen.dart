@@ -5,6 +5,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../main.dart';
+import '../constants/auth.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -510,12 +511,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       if (isAnon) {
         await auth.linkIdentity(
           OAuthProvider.google,
-          redirectTo: 'io.supabase.flutter://login-callback/',
+          redirectTo: supabaseRedirectUri,
         );
       } else {
         await auth.signInWithOAuth(
           OAuthProvider.google,
-          redirectTo: 'io.supabase.flutter://login-callback/',
+          redirectTo: supabaseRedirectUri,
         );
       }
       return null;
@@ -527,9 +528,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       final auth = Supabase.instance.client.auth;
       final isAnon = _isAnonymousSession(auth.currentSession);
       if (isAnon) {
-        await auth.linkIdentity(OAuthProvider.apple);
+        await auth.linkIdentity(
+          OAuthProvider.apple,
+          redirectTo: supabaseRedirectUri,
+        );
       } else {
-        await auth.signInWithOAuth(OAuthProvider.apple);
+        await auth.signInWithOAuth(
+          OAuthProvider.apple,
+          redirectTo: supabaseRedirectUri,
+        );
       }
       return null;
     });
@@ -545,6 +552,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   bool _isAnonymousSession(Session? session) {
     final user = session?.user;
     if (user == null) return false;
+    if (user.isAnonymous) return true;
     final appMeta = user.appMetadata;
     final provider = appMeta['provider'];
     if (provider is String && provider.toLowerCase() == 'anonymous') {

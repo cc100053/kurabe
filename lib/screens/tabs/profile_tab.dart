@@ -8,6 +8,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../main.dart';
+import '../../constants/auth.dart';
 import '../../services/supabase_service.dart';
 
 class ProfileTab extends StatefulWidget {
@@ -682,10 +683,18 @@ class _ProfileTabState extends State<ProfileTab> {
       _statusMessage = null;
     });
     try {
-      await Supabase.instance.client.auth.signInWithOAuth(
-        provider,
-        redirectTo: 'io.supabase.flutter://login-callback/',
-      );
+      final auth = Supabase.instance.client.auth;
+      if (_supabaseService.isGuest) {
+        await auth.linkIdentity(
+          provider,
+          redirectTo: supabaseRedirectUri,
+        );
+      } else {
+        await auth.signInWithOAuth(
+          provider,
+          redirectTo: supabaseRedirectUri,
+        );
+      }
       if (!mounted) return;
       setState(
         () => _statusMessage = '連携用のブラウザを開きました。サインインを完了してください。',

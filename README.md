@@ -54,6 +54,7 @@ Key packages:
 
 - Required tables/RPCs: `price_records` (see progress.md for columns) and RPCs `get_nearby_cheapest`, `search_products_fuzzy`, `get_nearby_records_by_category`, `transfer_guest_data`
 - Shopping list: add table `shopping_list_items` (id bigserial PK, user_id uuid FK auth.users not null, title text not null, is_done bool default false, created_at timestamptz default now()) with RLS allowing select/insert/update/delete when `auth.uid() = user_id`.
+- Auth redirect setup: keep `io.supabase.flutter://login-callback/` and the Supabase hosted callback in Supabase Auth → Redirect URLs; iOS Info.plist registers the `io.supabase.flutter` scheme for handoff.
 - Community endpoints expect authenticated users (anon is blocked in-app). Ensure RLS matches your privacy needs
 - Storage bucket `price_tags` must allow authenticated uploads; public read is used for image URLs
 
