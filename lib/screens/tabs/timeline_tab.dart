@@ -6,24 +6,60 @@ import 'package:intl/intl.dart';
 import '../../main.dart';
 import '../../widgets/community_product_tile.dart';
 
-class TimelineTab extends StatelessWidget {
+class TimelineTab extends StatefulWidget {
   const TimelineTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  State<TimelineTab> createState() => _TimelineTabState();
+}
+
+class _TimelineTabState extends State<TimelineTab> {
+  Stream<List<Map<String, dynamic>>>? _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = _buildStream();
+  }
+
+  Stream<List<Map<String, dynamic>>>? _buildStream() {
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    final stream = currentUserId == null
-        ? null
-        : Supabase.instance.client
-            .from('price_records')
-            .stream(primaryKey: ['id'])
-            .eq('user_id', currentUserId)
-            .order('created_at', ascending: false);
+    if (currentUserId == null) return null;
+    return Supabase.instance.client
+        .from('price_records')
+        .stream(primaryKey: ['id'])
+        .eq('user_id', currentUserId)
+        .order('created_at', ascending: false);
+  }
+
+  Future<void> _onRefresh() async {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    setState(() {
+      _stream = _buildStream();
+    });
+    if (currentUserId == null) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      return;
+    }
+    await Supabase.instance.client
+        .from('price_records')
+        .select('id')
+        .eq('user_id', currentUserId)
+        .order('created_at', ascending: false)
+        .limit(1);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stream = _stream;
 
     return Scaffold(
       backgroundColor: KurabeColors.background,
-      body: CustomScrollView(
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
           // Premium Header
           SliverAppBar(
             expandedHeight: 140,
@@ -169,7 +205,8 @@ class TimelineTab extends StatelessWidget {
           
           // Bottom padding for FAB
           const SliverToBoxAdapter(child: SizedBox(height: 120)),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -333,10 +370,18 @@ class TimelineTab extends StatelessWidget {
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
     final target = DateTime(date.year, date.month, date.day);
+    final weekday = _weekdayLabel(date);
 
-    if (target == today) return '今日';
-    if (target == yesterday) return '昨日';
-    return DateFormat('M月d日').format(date);
+    if (target == today) return '今日($weekday)';
+    if (target == yesterday) return '昨日($weekday)';
+    return '${DateFormat('M月d日').format(date)}($weekday)';
+  }
+
+  String _weekdayLabel(DateTime date) {
+    const labels = ['月', '火', '水', '木', '金', '土', '日'];
+    final index = date.weekday - 1;
+    if (index < 0 || index >= labels.length) return '';
+    return labels[index];
   }
 }
 

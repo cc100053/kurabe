@@ -35,6 +35,7 @@ class AddEditScreen extends StatefulWidget {
 class _AddEditScreenState extends State<AddEditScreen> {
   static const String _manualInputSentinel = '__manual_shop_input__';
   static final String _placesApiKey = dotenv.env['GOOGLE_PLACES_API_KEY'] ?? '';
+  static const int _insightRadiusMeters = 3000;
 
   bool _isCategorySheetOpen = false;
   final _productController = TextEditingController();
@@ -419,6 +420,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
         productName: productName,
         lat: latLng.$1,
         lng: latLng.$2,
+        radiusMeters: _insightRadiusMeters,
       );
       if (cheapest == null) {
         setState(() => _setInsightState(_InsightState.none));
@@ -644,20 +646,25 @@ class _AddEditScreenState extends State<AddEditScreen> {
 
   Widget _buildInsightCard() {
     if (_insightState == _InsightState.idle) return const SizedBox.shrink();
+    final radiusKm = _insightRadiusMeters ~/ 1000;
     Color bg;
     String text;
     if (_insightState == _InsightState.loading) {
       bg = Colors.grey.shade200;
-      text = 'コミュニティ価格を確認中...';
+      text = 'コミュニティ価格を確認中...（約${radiusKm}km圏内）';
     } else if (_insightState == _InsightState.none) {
       bg = Colors.grey.shade200;
-      text = '近くに最近のデータがありません。最初の記録者になりましょう！';
+      text =
+          '近くに最近のデータがありません（約${radiusKm}km圏内）。最初の記録者になりましょう！';
     } else if (_insightState == _InsightState.best) {
       bg = Colors.amber.shade200;
       text = '付近で最安値を見つけました！';
       if (_insightPrice != null && _insightShop != null) {
+        final distanceText = _insightDistanceMeters != null
+            ? ' • ${_formatDistance(_insightDistanceMeters!)}'
+            : '';
         text =
-            '付近で最安値を見つけました！(¥${_insightPrice!.round()} • $_insightShop)';
+            '付近で最安値を見つけました！(¥${_insightPrice!.round()} • $_insightShop$distanceText)';
       }
     } else {
       bg = Colors.green.shade200;
@@ -668,7 +675,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
       final distanceText = _insightDistanceMeters != null
           ? ' (${_formatDistance(_insightDistanceMeters!)})'
           : '';
-      text = 'より安い価格を発見！$shopTextで$priceText$distanceText';
+      text =
+          'より安い価格を発見！$shopTextで$priceText$distanceText（約${radiusKm}km圏内）';
     }
     return Card(
       color: bg,

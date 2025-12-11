@@ -29,6 +29,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   List<Map<String, dynamic>>? _communityCache;
   DateTime? _communityCacheTime;
   static const Duration _communityCacheTtl = Duration(minutes: 10);
+  static const int _communityRadiusMeters = 3000;
   bool _guestBlocked = false;
   String? _locationError;
 
@@ -127,7 +128,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       categoryTag: trimmed,
       lat: lat,
       lng: lng,
-      radiusMeters: 5000,
+      radiusMeters: _communityRadiusMeters,
     );
     _communityCache = result;
     _communityCacheTime = DateTime.now();
@@ -214,7 +215,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        '近く5kmのコミュニティ投稿を表示',
+                        '近く${_communityRadiusMeters ~/ 1000}kmのコミュニティ投稿を表示',
                         style: TextStyle(
                           color: KurabeColors.primary,
                           fontWeight: FontWeight.w600,

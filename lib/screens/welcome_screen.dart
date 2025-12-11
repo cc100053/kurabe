@@ -23,8 +23,91 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   bool _isLoading = false;
   bool _isSignUpMode = false;
   bool _obscurePassword = true;
-  String? _error;
-  String? _message;
+
+  /// Converts auth exceptions to user-friendly Japanese messages
+  String _friendlyErrorMessage(dynamic error) {
+    final msg = error.toString().toLowerCase();
+    
+    // Password errors
+    if (msg.contains('password') && (msg.contains('6') || msg.contains('least'))) {
+      return 'パスワードは6文字以上で入力してください。';
+    }
+    if (msg.contains('weak') && msg.contains('password')) {
+      return 'パスワードが弱すぎます。より強力なパスワードを設定してください。';
+    }
+    
+    // Login errors
+    if (msg.contains('invalid') && (msg.contains('login') || msg.contains('credentials'))) {
+      return 'メールアドレスまたはパスワードが正しくありません。';
+    }
+    
+    // Email errors
+    if (msg.contains('invalid') && msg.contains('email')) {
+      return 'メールアドレスの形式が正しくありません。';
+    }
+    if ((msg.contains('email') || msg.contains('user')) && 
+        msg.contains('already') && 
+        (msg.contains('registered') || msg.contains('exists'))) {
+      return 'このメールアドレスは既に登録されています。';
+    }
+    if (msg.contains('email') && msg.contains('not') && msg.contains('confirmed')) {
+      return 'メールアドレスが確認されていません。受信箱を確認してください。';
+    }
+    
+    // Network errors
+    if (msg.contains('network') || msg.contains('connection') || msg.contains('timeout') || msg.contains('socket')) {
+      return 'ネットワーク接続に問題があります。接続を確認してください。';
+    }
+    
+    // Rate limiting
+    if (msg.contains('rate') && msg.contains('limit')) {
+      return 'リクエストが多すぎます。しばらく待ってから再試行してください。';
+    }
+    
+    // Generic fallback
+    return '予期せぬエラーが発生しました。もう一度お試しください。';
+  }
+
+  /// Shows a floating SnackBar with the given message
+  void _showStatusSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError
+                  ? PhosphorIcons.warningCircle(PhosphorIconsStyle.fill)
+                  : PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError ? KurabeColors.error : KurabeColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        duration: const Duration(seconds: 3),
+        dismissDirection: DismissDirection.horizontal,
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -192,6 +275,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                         ),
                 ),
               ),
+              if (!_isSignUpMode) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.center,
+                  child: TextButton(
+                    onPressed: _isLoading ? null : _handleForgotPassword,
+                    child: const Text('パスワードをお忘れですか？'),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
 
               // Toggle Sign Up / Login
@@ -274,71 +367,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 isOutlined: true,
               ),
 
-              // Error / Success Messages
-              if (_error != null) ...[
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: KurabeColors.error.withAlpha(26),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: KurabeColors.error.withAlpha(77)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        PhosphorIcons.warningCircle(PhosphorIconsStyle.fill),
-                        color: KurabeColors.error,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _error!,
-                          style: TextStyle(
-                            color: KurabeColors.error,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
 
-              if (_message != null) ...[
-                const SizedBox(height: 20),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: KurabeColors.success.withAlpha(26),
-                    borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: KurabeColors.success.withAlpha(77)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
-                        color: KurabeColors.success,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _message!,
-                          style: TextStyle(
-                            color: KurabeColors.success,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
 
               const SizedBox(height: 32),
             ],
@@ -467,7 +496,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
-      setState(() => _error = 'メールアドレスとパスワードを入力してください。');
+      _showStatusSnackBar('メールアドレスとパスワードを入力してください。', isError: true);
       return;
     }
 
@@ -478,17 +507,91 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
   }
 
+  Future<void> _handleForgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      _showStatusSnackBar('登録済みのメールアドレスを入力してください。', isError: true);
+      return;
+    }
+    await _runAuthAction(() async {
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: supabaseRedirectUri,
+      );
+      return 'パスワードリセット用のメールを送信しました。';
+    });
+  }
+
   Future<void> _signUpWithEmail(String email, String password) async {
     await _runAuthAction(() async {
-      final response = await Supabase.instance.client.auth.signUp(
-        email: email,
-        password: password,
-      );
-      if (response.session != null) {
-        return 'アカウントを作成しました。';
+      final auth = Supabase.instance.client.auth;
+      // Try login first to detect existing accounts and avoid duplicate sign-up attempts.
+      try {
+        final loginResp = await auth.signInWithPassword(
+          email: email,
+          password: password,
+        );
+        if (loginResp.session != null) {
+          return '既存のアカウントにログインしました。';
+        }
+      } on AuthException catch (loginError) {
+        final msg = loginError.message.toLowerCase();
+        final invalid = msg.contains('invalid') || msg.contains('credentials');
+        if (invalid) {
+          await _showExistingAccountDialog(email);
+          setState(() {
+            _isSignUpMode = false;
+            _emailController.text = email;
+          });
+          _showStatusSnackBar('既存のアカウントの可能性があります。ログインしてください。', isError: true);
+          return null;
+        } else {
+          rethrow;
+        }
       }
-      return '確認メールを送信しました。メールを確認してください。';
+      try {
+        final response = await auth.signUp(
+          email: email,
+          password: password,
+        );
+        if (response.session != null) {
+          return 'アカウントを作成しました。';
+        }
+        return '確認メールを送信しました。メールを確認してください。';
+      } on AuthException catch (e) {
+        final msg = e.message.toLowerCase();
+        final alreadyRegistered =
+            msg.contains('already') && msg.contains('registered');
+        if (alreadyRegistered) {
+          // Switch to login mode and prefill email so user can sign in.
+          setState(() {
+            _isSignUpMode = false;
+            _emailController.text = email;
+          });
+          _showStatusSnackBar('既に登録済みです。ログインしてください。', isError: true);
+          return null;
+        }
+        rethrow;
+      }
     });
+  }
+
+  Future<void> _showExistingAccountDialog(String email) async {
+    await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('既存アカウントの可能性'),
+        content: Text(
+          'このメールは既に登録済みの可能性があります。ログインを試してください。\n\n$email',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('ログインする'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loginWithEmail(String email, String password) async {
@@ -568,27 +671,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Future<void> _runAuthAction(Future<String?> Function() action) async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-      _message = null;
-    });
+    setState(() => _isLoading = true);
     try {
       final msg = await action();
       if (mounted && msg != null) {
-        setState(() => _message = msg);
+        _showStatusSnackBar(msg);
       }
     } catch (e) {
-      String errorMessage = '$e';
-      // Clean up common error messages
-      if (errorMessage.contains('Invalid login credentials')) {
-        errorMessage = 'メールアドレスまたはパスワードが正しくありません。';
-      } else if (errorMessage.contains('User already registered')) {
-        errorMessage = 'このメールアドレスは既に登録されています。';
-      } else if (errorMessage.contains('Password should be')) {
-        errorMessage = 'パスワードは6文字以上で入力してください。';
-      }
-      setState(() => _error = errorMessage);
+      _showStatusSnackBar(_friendlyErrorMessage(e), isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

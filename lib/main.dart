@@ -63,8 +63,15 @@ class KurabeColors {
   static const Color shadow = Color(0x0A000000);         // Soft black shadow
 }
 
-class KurabeApp extends StatelessWidget {
+class KurabeApp extends StatefulWidget {
   const KurabeApp({super.key});
+
+  @override
+  State<KurabeApp> createState() => _KurabeAppState();
+}
+
+class _KurabeAppState extends State<KurabeApp> {
+  bool _resetDialogOpen = false;
 
   @override
   Widget build(BuildContext context) {
@@ -386,39 +393,127 @@ class KurabeApp extends StatelessWidget {
         home: StreamBuilder<AuthState>(
           stream: Supabase.instance.client.auth.onAuthStateChange,
           builder: (context, snapshot) {
-            final session = Supabase.instance.client.auth.currentSession;
-            final isAnonymous = _isAnonymousSession(session);
-            if (isAnonymous) {
+            final authState = snapshot.data;
+            if (authState?.event == AuthChangeEvent.passwordRecovery &&
+                !_resetDialogOpen) {
+              _resetDialogOpen = true;
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                Supabase.instance.client.auth.signOut();
+                if (mounted) _showPasswordResetDialog(context);
               });
-              return const WelcomeScreen();
             }
-            if (session != null) {
-              return const MainScaffold();
-            }
+            final session = Supabase.instance.client.auth.currentSession;
+            if (session != null) return const MainScaffold();
             return const WelcomeScreen();
           },
         ),
       ),
     );
   }
-}
 
-bool _isAnonymousSession(Session? session) {
-  final user = session?.user;
-  if (user == null) return false;
-  if (user.isAnonymous) return true;
-  final appMeta = user.appMetadata;
-  final provider = appMeta['provider'];
-  if (provider is String && provider.toLowerCase() == 'anonymous') {
-    return true;
+  Future<void> _showPasswordResetDialog(BuildContext context) async {
+    final newPassController = TextEditingController();
+    final confirmController = TextEditingController();
+    String? error;
+    bool saving = false;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            Future<void> submit() async {
+              final newPass = newPassController.text.trim();
+              final confirm = confirmController.text.trim();
+              if (newPass.isEmpty || confirm.isEmpty) {
+                setState(() => error = 'パスワードを入力してください。');
+                return;
+              }
+              if (newPass.length < 6) {
+                setState(() => error = 'パスワードは6文字以上で入力してください。');
+                return;
+              }
+              if (newPass != confirm) {
+                setState(() => error = 'パスワードが一致しません。');
+                return;
+              }
+              setState(() {
+                saving = true;
+                error = null;
+              });
+              try {
+                await Supabase.instance.client.auth.updateUser(
+                  UserAttributes(password: newPass),
+                );
+                if (!mounted) return;
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('パスワードを更新しました。')),
+                );
+              } catch (e) {
+                if (!mounted) return;
+                setState(() {
+                  saving = false;
+                  error = '更新に失敗しました: $e';
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: const Text('パスワード再設定'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: newPassController,
+                    obscureText: true,
+                    decoration: const InputDecoration(labelText: '新しいパスワード'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: confirmController,
+                    obscureText: true,
+                    decoration:
+                        const InputDecoration(labelText: '新しいパスワード(確認)'),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      error!,
+                      style: const TextStyle(
+                        color: KurabeColors.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving ? null : () => Navigator.of(context).pop(),
+                  child: const Text('キャンセル'),
+                ),
+                ElevatedButton(
+                  onPressed: saving ? null : submit,
+                  child: saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('更新'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (mounted) {
+      setState(() => _resetDialogOpen = false);
+    } else {
+      _resetDialogOpen = false;
+    }
   }
-  final providers = appMeta['providers'];
-  if (providers is List) {
-    final lower = providers.map((e) => e.toString().toLowerCase());
-    if (lower.contains('anonymous')) return true;
-  }
-  final metaFlag = (user.userMetadata ?? const {})['is_anonymous'];
-  return metaFlag is bool && metaFlag;
 }

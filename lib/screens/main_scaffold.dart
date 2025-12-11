@@ -18,20 +18,22 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold>
     with SingleTickerProviderStateMixin {
+  final GlobalKey<ProfileTabState> _profileTabKey = GlobalKey<ProfileTabState>();
   int _currentIndex = 0;
   late final AnimationController _fabAnimController;
   late final Animation<double> _fabScaleAnim;
 
-  final _tabs = const [
-    TimelineTab(),
-    CatalogTab(),
-    ShoppingListScreen(),
-    ProfileTab(),
-  ];
+  late final List<Widget> _tabs;
 
   @override
   void initState() {
     super.initState();
+    _tabs = [
+      const TimelineTab(),
+      const CatalogTab(),
+      const ShoppingListScreen(),
+      ProfileTab(key: _profileTabKey),
+    ];
     _fabAnimController = AnimationController(
       duration: const Duration(milliseconds: 200),
       vsync: this,
@@ -49,6 +51,9 @@ class _MainScaffoldState extends State<MainScaffold>
 
   void _onNavTap(int index) {
     HapticFeedback.lightImpact();
+    if (index == 3) {
+      _profileTabKey.currentState?.refreshStats();
+    }
     setState(() => _currentIndex = index);
   }
 
@@ -258,7 +263,7 @@ class _MainScaffoldState extends State<MainScaffold>
 
   Future<void> _navigateToScan() async {
     HapticFeedback.mediumImpact();
-    await Navigator.of(context).push(
+    final result = await Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
             const AddEditScreen(),
@@ -280,6 +285,9 @@ class _MainScaffoldState extends State<MainScaffold>
         transitionDuration: const Duration(milliseconds: 300),
       ),
     );
+    if (result != null) {
+      _profileTabKey.currentState?.refreshStats();
+    }
     if (mounted) setState(() {});
   }
 }

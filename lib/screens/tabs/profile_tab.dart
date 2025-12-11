@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -15,20 +16,278 @@ class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
 
   @override
-  State<ProfileTab> createState() => _ProfileTabState();
+  State<ProfileTab> createState() => ProfileTabState();
 }
 
-class _ProfileTabState extends State<ProfileTab> {
+class ProfileTabState extends State<ProfileTab> {
   final SupabaseService _supabaseService = SupabaseService();
+  StreamSubscription<AuthState>? _authStateSub;
+  OAuthProvider? _lastProvider;
+  List<Map<String, dynamic>>? _pendingGuestRecords;
   bool _isLoading = false;
-  String? _statusMessage;
   late Future<Map<String, dynamic>> _statsFuture;
   bool _isUpdatingProfile = false;
+  bool _handledLinkError = false;
+
+  /// Converts auth exceptions to user-friendly Japanese messages
+  String _friendlyErrorMessage(dynamic error) {
+    final msg = error.toString().toLowerCase();
+    
+    // Password errors
+    if (msg.contains('password') && (msg.contains('6') || msg.contains('least'))) {
+      return 'パスワードは6文字以上で入力してください。';
+    }
+    if (msg.contains('weak') && msg.contains('password')) {
+      return 'パスワードが弱すぎます。より強力なパスワードを設定してください。';
+    }
+    if (msg.contains('invalid') && msg.contains('password')) {
+      return 'パスワードが正しくありません。';
+    }
+    
+    // Email errors
+    if (msg.contains('invalid') && msg.contains('email')) {
+      return 'メールアドレスの形式が正しくありません。';
+    }
+    if ((msg.contains('email') || msg.contains('user')) && 
+        msg.contains('already') && 
+        (msg.contains('registered') || msg.contains('exists'))) {
+      return 'このメールアドレスは既に登録されています。';
+    }
+    
+    // Identity/account errors
+    if (msg.contains('identity') && (msg.contains('exists') || msg.contains('linked'))) {
+      return 'このアカウントは既に別のユーザーに紐づいています。';
+    }
+    
+    // Network errors
+    if (msg.contains('network') || msg.contains('connection') || msg.contains('timeout') || msg.contains('socket')) {
+      return 'ネットワーク接続に問題があります。接続を確認してください。';
+    }
+    
+    // Auth errors
+    if (msg.contains('invalid') && (msg.contains('credentials') || msg.contains('login'))) {
+      return 'メールアドレスまたはパスワードが正しくありません。';
+    }
+    if (msg.contains('not') && msg.contains('found')) {
+      return 'アカウントが見つかりません。';
+    }
+    if (msg.contains('email') && msg.contains('not') && msg.contains('confirmed')) {
+      return 'メールアドレスが確認されていません。受信箱を確認してください。';
+    }
+    
+    // Rate limiting
+    if (msg.contains('rate') && msg.contains('limit')) {
+      return 'リクエストが多すぎます。しばらく待ってから再試行してください。';
+    }
+    
+    // Generic fallback - don't show technical details
+    return '予期せぬエラーが発生しました。もう一度お試しください。';
+  }
+
+  /// Shows a floating SnackBar with the given message
+  void _showStatusSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    
+    // Dismiss any existing snackbar
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError
+                  ? PhosphorIcons.warningCircle(PhosphorIconsStyle.fill)
+                  : PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError ? KurabeColors.error : KurabeColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        duration: const Duration(seconds: 3),
+        dismissDirection: DismissDirection.horizontal,
+      ),
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     _statsFuture = _fetchProfileStats();
+    _listenAuthErrors();
+  }
+
+  @override
+  void dispose() {
+    _authStateSub?.cancel();
+    super.dispose();
+  }
+
+  Future<bool?> _showIdentityExistsDialog(OAuthProvider provider) {
+    final providerLabel =
+        provider == OAuthProvider.google ? 'Google' : 'Apple';
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('既に別のアカウントにリンク済みです'),
+          content: Text(
+            '$providerLabel アカウントは既に別のユーザーに紐づいています。\n'
+            'ゲストのままではリンクできません。$providerLabel で直接ログインしますか？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('キャンセル'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('$providerLabel でログイン'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _listenAuthErrors() {
+    _authStateSub?.cancel();
+    _authStateSub = Supabase.instance.client.auth.onAuthStateChange.listen(
+      (state) async {
+        if (state.event == AuthChangeEvent.signedIn &&
+            _pendingGuestRecords != null &&
+            _pendingGuestRecords!.isNotEmpty) {
+          await _migrateGuestRecords();
+        }
+      },
+      onError: (error, stackTrace) {
+        _handleLinkError(error, _lastProvider ?? OAuthProvider.google);
+      },
+    );
+  }
+
+  Future<void> _handleLinkError(
+    Object error,
+    OAuthProvider provider,
+  ) async {
+    if (_handledLinkError) return;
+    _handledLinkError = true;
+    await _captureGuestRecords();
+    final authEx = error is AuthException ? error : null;
+    final code = (authEx?.statusCode ?? authEx?.code ?? '').toLowerCase();
+    final message = error.toString().toLowerCase();
+    final identityExists = code.contains('identity_already_exists') ||
+        (code.contains('identity') && code.contains('exists')) ||
+        message.contains('identity_already_exists') ||
+        message.contains('identity is already linked');
+    if (identityExists) {
+      final guestUserId = Supabase.instance.client.auth.currentUser?.id;
+      if (guestUserId != null && _pendingGuestRecords == null) {
+        try {
+          final rows = await Supabase.instance.client
+              .from('price_records')
+              .select()
+              .eq('user_id', guestUserId);
+          _pendingGuestRecords = rows.whereType<Map>().map((e) {
+            final copy = Map<String, dynamic>.from(e);
+            copy.remove('id');
+            copy['user_id'] = null;
+            return copy;
+          }).toList();
+        } catch (_) {
+          _pendingGuestRecords = null;
+        }
+      }
+      final shouldLogin = await _showIdentityExistsDialog(provider);
+      if (shouldLogin == true) {
+        try {
+          await Supabase.instance.client.auth.signOut();
+          await Supabase.instance.client.auth.signInWithOAuth(
+            provider,
+            redirectTo: supabaseRedirectUri,
+          );
+          if (!mounted) return;
+          _showStatusSnackBar('ブラウザを開きました。Googleアカウントでログインしてください。');
+        } catch (loginError) {
+          if (!mounted) return;
+          _showStatusSnackBar('ログインに失敗しました。${_friendlyErrorMessage(loginError)}', isError: true);
+        }
+      } else {
+        if (!mounted) return;
+        _showStatusSnackBar('このアカウントは既に別のユーザーに紐づいています。', isError: true);
+      }
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      return;
+    }
+    if (!mounted) return;
+    _showStatusSnackBar('連携に失敗しました。${_friendlyErrorMessage(error)}', isError: true);
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _migrateGuestRecords() async {
+    final newUserId = Supabase.instance.client.auth.currentUser?.id;
+    final records = _pendingGuestRecords;
+    _pendingGuestRecords = null;
+    if (newUserId == null || records == null || records.isEmpty) return;
+    final payload = records
+        .map((r) => Map<String, dynamic>.from(r)..['user_id'] = newUserId)
+        .toList();
+    try {
+      await Supabase.instance.client.from('price_records').insert(payload);
+      if (mounted) {
+        _showStatusSnackBar('ゲストの記録をアカウントに引き継ぎました。');
+        refreshStats();
+      }
+    } catch (e) {
+      if (mounted) {
+        _showStatusSnackBar('記録の引き継ぎに失敗しました。${_friendlyErrorMessage(e)}', isError: true);
+      }
+    }
+  }
+
+  Future<void> _captureGuestRecords() async {
+    if (!_supabaseService.isGuest) return;
+    final guestUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (guestUserId == null) return;
+    try {
+      final rows = await Supabase.instance.client
+          .from('price_records')
+          .select()
+          .eq('user_id', guestUserId);
+      _pendingGuestRecords = rows.whereType<Map>().map((e) {
+        final copy = Map<String, dynamic>.from(e);
+        copy.remove('id');
+        copy['user_id'] = null;
+        return copy;
+      }).toList();
+    } catch (_) {
+      _pendingGuestRecords = null;
+    }
+  }
+
+  Future<void> refreshStats() async {
+    setState(() {
+      _statsFuture = _fetchProfileStats();
+    });
+    await _statsFuture;
   }
 
   @override
@@ -39,8 +298,11 @@ class _ProfileTabState extends State<ProfileTab> {
 
     return Scaffold(
       backgroundColor: KurabeColors.background,
-      body: CustomScrollView(
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: refreshStats,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
           // Premium header with gradient
           SliverToBoxAdapter(
             child: _buildHeader(user, isGuest, emailText),
@@ -56,56 +318,10 @@ class _ProfileTabState extends State<ProfileTab> {
             child: _buildSettingsSection(isGuest),
           ),
 
-          // Status message
-          if (_statusMessage != null)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _statusMessage!.contains('失敗')
-                        ? KurabeColors.error.withAlpha(26)
-                        : KurabeColors.success.withAlpha(26),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _statusMessage!.contains('失敗')
-                          ? KurabeColors.error.withAlpha(77)
-                          : KurabeColors.success.withAlpha(77),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _statusMessage!.contains('失敗')
-                            ? PhosphorIcons.warningCircle(PhosphorIconsStyle.fill)
-                            : PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
-                        color: _statusMessage!.contains('失敗')
-                            ? KurabeColors.error
-                            : KurabeColors.success,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _statusMessage!,
-                          style: TextStyle(
-                            color: _statusMessage!.contains('失敗')
-                                ? KurabeColors.error
-                                : KurabeColors.success,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
           // Bottom spacing
           const SliverToBoxAdapter(child: SizedBox(height: 120)),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -365,6 +581,7 @@ class _ProfileTabState extends State<ProfileTab> {
                     value: loading ? null : level,
                     label: 'レベル',
                     color: KurabeColors.accent,
+                    onTap: loading ? null : () => _showLevelInfoDialog(scans),
                   ),
                   _buildDivider(),
                   _buildStatItem(
@@ -387,47 +604,58 @@ class _ProfileTabState extends State<ProfileTab> {
     required String? value,
     required String label,
     required Color color,
+    VoidCallback? onTap,
   }) {
     return Expanded(
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withAlpha(26),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(height: 12),
-          value == null
-              ? SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: color,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withAlpha(26),
+                    shape: BoxShape.circle,
                   ),
-                )
-              : Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: KurabeColors.textPrimary,
-                    letterSpacing: -0.5,
+                  child: Icon(icon, color: color, size: 24),
+                ),
+                const SizedBox(height: 12),
+                value == null
+                    ? SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: color,
+                        ),
+                      )
+                    : Text(
+                        value,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: KurabeColors.textPrimary,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: KurabeColors.textTertiary,
                   ),
                 ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: KurabeColors.textTertiary,
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -477,11 +705,11 @@ class _ProfileTabState extends State<ProfileTab> {
               children: [
                 if (isGuest) ...[
                   _buildSettingsTile(
-                    icon: PhosphorIcons.googleLogo(PhosphorIconsStyle.fill),
-                    title: 'Googleで連携',
-                    subtitle: 'データを安全に保存',
-                    onTap: _isLoading
-                        ? null
+                icon: PhosphorIcons.googleLogo(PhosphorIconsStyle.fill),
+                title: 'Googleで連携',
+                subtitle: 'データを安全に保存',
+                onTap: _isLoading
+                    ? null
                         : () => _linkWithOAuth(OAuthProvider.google),
                     iconColor: const Color(0xFFDB4437),
                   ),
@@ -500,10 +728,18 @@ class _ProfileTabState extends State<ProfileTab> {
                   ],
                   _buildSettingsTile(
                     icon: PhosphorIcons.envelope(PhosphorIconsStyle.fill),
-                    title: 'メールで連携',
-                    subtitle: 'メールアドレスで登録',
+                    title: '新規アカウント作成',
+                    subtitle: 'メールアドレスで新しく登録',
                     onTap: _isLoading ? null : _showEmailLinkDialog,
                     iconColor: KurabeColors.primary,
+                  ),
+                  _buildTileDivider(),
+                  _buildSettingsTile(
+                    icon: PhosphorIcons.key(PhosphorIconsStyle.fill),
+                    title: '既存アカウントでログイン',
+                    subtitle: '登録済みメールでサインイン',
+                    onTap: _isLoading ? null : _showExistingEmailLoginDialog,
+                    iconColor: KurabeColors.accent,
                   ),
                 ] else ...[
                   _buildSettingsTile(
@@ -544,7 +780,7 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
               child: _buildSettingsTile(
                 icon: PhosphorIcons.trash(PhosphorIconsStyle.fill),
-                title: 'ゲストデータを削除',
+                title: 'ログアウト',
                 subtitle: 'すべての記録を消去します',
                 onTap: _isLoading ? null : _confirmGuestReset,
                 iconColor: KurabeColors.error,
@@ -661,15 +897,12 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   Future<void> _handleSignOut() async {
-    setState(() {
-      _isLoading = true;
-      _statusMessage = null;
-    });
+    setState(() => _isLoading = true);
     try {
       await Supabase.instance.client.auth.signOut();
-      setState(() => _statusMessage = 'サインアウトしました。');
+      _showStatusSnackBar('サインアウトしました。');
     } catch (e) {
-      setState(() => _statusMessage = 'サインアウトに失敗しました: $e');
+      _showStatusSnackBar('サインアウトに失敗しました。${_friendlyErrorMessage(e)}', isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -678,10 +911,9 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   Future<void> _linkWithOAuth(OAuthProvider provider) async {
-    setState(() {
-      _isLoading = true;
-      _statusMessage = null;
-    });
+    _lastProvider = provider;
+    _handledLinkError = false;
+    setState(() => _isLoading = true);
     try {
       final auth = Supabase.instance.client.auth;
       if (_supabaseService.isGuest) {
@@ -696,12 +928,9 @@ class _ProfileTabState extends State<ProfileTab> {
         );
       }
       if (!mounted) return;
-      setState(
-        () => _statusMessage = '連携用のブラウザを開きました。サインインを完了してください。',
-      );
+      _showStatusSnackBar('連携用のブラウザを開きました。サインインを完了してください。');
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _statusMessage = '連携に失敗しました: $e');
+      await _handleLinkError(e, provider);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -756,24 +985,114 @@ class _ProfileTabState extends State<ProfileTab> {
     }
   }
 
+  Future<void> _showExistingEmailLoginDialog({String? prefillEmail}) async {
+    final emailController = TextEditingController(text: prefillEmail ?? '');
+    final passwordController = TextEditingController();
+
+    final shouldLogin = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('既存メールでログイン'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'メールアドレス'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'パスワード'),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'ゲストの記録を保持したまま既存アカウントにログインします。',
+                style: TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('キャンセル'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('ログイン'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldLogin == true) {
+      await _loginWithExistingEmail(
+        emailController.text.trim(),
+        passwordController.text,
+      );
+    }
+  }
+
   Future<void> _linkWithEmail(String email, String password) async {
     if (email.isEmpty || password.isEmpty) return;
-    setState(() {
-      _isLoading = true;
-      _statusMessage = null;
-    });
+    setState(() => _isLoading = true);
     try {
       await Supabase.instance.client.auth.signUp(
         email: email,
         password: password,
       );
       if (!mounted) return;
-      setState(
-        () => _statusMessage = '確認メールを送信しました。受信箱を確認してください。',
-      );
+      _showStatusSnackBar('確認メールを送信しました。受信箱を確認してください。');
+    } on AuthException catch (e) {
+      final msgLower = e.message.toLowerCase();
+      final alreadyRegistered =
+          msgLower.contains('already') && msgLower.contains('registered');
+      if (alreadyRegistered) {
+        if (mounted) {
+          _showStatusSnackBar('このメールは既に登録されています。ログインから接続してください。', isError: true);
+        }
+        await _showExistingEmailLoginDialog(prefillEmail: email);
+        return;
+      }
+      if (!mounted) return;
+      _showStatusSnackBar('メール連携に失敗しました。${_friendlyErrorMessage(e)}', isError: true);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _statusMessage = 'メール連携に失敗しました: $e');
+      _showStatusSnackBar('メール連携に失敗しました。${_friendlyErrorMessage(e)}', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loginWithExistingEmail(
+    String email,
+    String password,
+  ) async {
+    if (email.isEmpty || password.isEmpty) return;
+    setState(() => _isLoading = true);
+
+    await _captureGuestRecords();
+
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      await _migrateGuestRecords();
+      if (!mounted) return;
+      _showStatusSnackBar('ログインしました。ゲストの記録を引き継ぎました。');
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      _showStatusSnackBar('ログインに失敗しました。${_friendlyErrorMessage(e)}', isError: true);
+    } catch (e) {
+      if (!mounted) return;
+      _showStatusSnackBar('ログインに失敗しました。${_friendlyErrorMessage(e)}', isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -809,17 +1128,14 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   Future<void> _resetGuestData() async {
-    setState(() {
-      _isLoading = true;
-      _statusMessage = null;
-    });
+    setState(() => _isLoading = true);
     try {
       await Supabase.instance.client.auth.signOut();
       if (!mounted) return;
-      setState(() => _statusMessage = 'ゲストとしてサインアウトしました。');
+      _showStatusSnackBar('ゲストとしてサインアウトしました。');
     } catch (e) {
       if (!mounted) return;
-      setState(() => _statusMessage = 'サインアウトに失敗しました: $e');
+      _showStatusSnackBar('サインアウトに失敗しました。${_friendlyErrorMessage(e)}', isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -882,9 +1198,356 @@ class _ProfileTabState extends State<ProfileTab> {
   }
 
   String _levelLabel(int scans) {
-    if (scans >= 50) return '達人';
-    if (scans >= 10) return '熟練';
+    if (scans >= 100) return '仙人';
+    if (scans >= 50) return '師範';
+    if (scans >= 30) return '達人';
+    if (scans >= 15) return '熟練';
+    if (scans >= 5) return '初級';
     return '見習';
+  }
+
+  Future<void> _showLevelInfoDialog(int scans) async {
+    final levels = [
+      ('見習', 0, Icons.eco_outlined),
+      ('初級', 5, Icons.trending_up),
+      ('熟練', 15, Icons.star_outline),
+      ('達人', 30, Icons.workspace_premium_outlined),
+      ('師範', 50, Icons.emoji_events_outlined),
+      ('仙人', 100, Icons.auto_awesome),
+    ];
+
+    // Find current and next level
+    int currentLevelIndex = 0;
+    for (int i = levels.length - 1; i >= 0; i--) {
+      if (scans >= levels[i].$2) {
+        currentLevelIndex = i;
+        break;
+      }
+    }
+    
+    final currentLevel = levels[currentLevelIndex];
+    final isMaxLevel = currentLevelIndex == levels.length - 1;
+    final nextLevel = isMaxLevel ? null : levels[currentLevelIndex + 1];
+    
+    // Calculate progress to next level
+    double progress = 1.0;
+    int scansToNext = 0;
+    if (!isMaxLevel && nextLevel != null) {
+      final currentThreshold = currentLevel.$2;
+      final nextThreshold = nextLevel.$2;
+      final range = nextThreshold - currentThreshold;
+      final progressInRange = scans - currentThreshold;
+      progress = (progressInRange / range).clamp(0.0, 1.0);
+      scansToNext = nextThreshold - scans;
+    }
+
+    // Gradient colors for levels
+    final levelColors = [
+      [const Color(0xFF9CA3AF), const Color(0xFF6B7280)], // 見習 - Gray
+      [const Color(0xFF60A5FA), const Color(0xFF3B82F6)], // 初級 - Blue
+      [const Color(0xFF34D399), const Color(0xFF10B981)], // 熟練 - Green
+      [const Color(0xFFFBBF24), const Color(0xFFF59E0B)], // 達人 - Amber
+      [const Color(0xFFF472B6), const Color(0xFFEC4899)], // 師範 - Pink
+      [const Color(0xFFA78BFA), const Color(0xFF8B5CF6)], // 仙人 - Purple
+    ];
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 340),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 30,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header with gradient
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: levelColors[currentLevelIndex],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          currentLevel.$3,
+                          size: 32,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        currentLevel.$1,
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$scans 回スキャン達成',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Progress section
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!isMaxLevel && nextLevel != null) ...[
+                        // Next level info
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '次のレベル: ${nextLevel.$1}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF374151),
+                              ),
+                            ),
+                            Text(
+                              'あと $scansToNext 回',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: levelColors[currentLevelIndex + 1][0],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        // Progress bar
+                        Container(
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return Stack(
+                                children: [
+                                  AnimatedContainer(
+                                    duration: const Duration(milliseconds: 500),
+                                    curve: Curves.easeOutCubic,
+                                    width: constraints.maxWidth * progress,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: levelColors[currentLevelIndex],
+                                      ),
+                                      borderRadius: BorderRadius.circular(6),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: levelColors[currentLevelIndex][0]
+                                              .withOpacity(0.4),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        // Progress label
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${currentLevel.$2}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                            Text(
+                              '${nextLevel.$2}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                      ] else ...[
+                        // Max level reached
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: levelColors[currentLevelIndex][0].withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.verified,
+                                color: levelColors[currentLevelIndex][0],
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  '最高レベルに到達しました！',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF374151),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                      
+                      // Level milestones
+                      const Text(
+                        'レベル一覧',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF374151),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ...List.generate(levels.length, (index) {
+                        final level = levels[index];
+                        final isAchieved = scans >= level.$2;
+                        final isCurrent = index == currentLevelIndex;
+                        
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  gradient: isAchieved
+                                      ? LinearGradient(colors: levelColors[index])
+                                      : null,
+                                  color: isAchieved ? null : Colors.grey.shade200,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  level.$3,
+                                  size: 16,
+                                  color: isAchieved ? Colors.white : Colors.grey.shade400,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  level.$1,
+                                  style: TextStyle(
+                                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                                    color: isAchieved
+                                        ? const Color(0xFF374151)
+                                        : Colors.grey.shade400,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '${level.$2}回',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isAchieved
+                                      ? Colors.grey.shade600
+                                      : Colors.grey.shade400,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              if (isAchieved)
+                                Icon(
+                                  Icons.check_circle,
+                                  size: 18,
+                                  color: levelColors[index][0],
+                                )
+                              else
+                                Icon(
+                                  Icons.circle_outlined,
+                                  size: 18,
+                                  color: Colors.grey.shade300,
+                                ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+                
+                // Close button
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: Colors.grey.shade300),
+                        ),
+                      ),
+                      child: const Text(
+                        '閉じる',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _changeAvatar() async {
@@ -897,15 +1560,12 @@ class _ProfileTabState extends State<ProfileTab> {
     if (picked == null) return;
     final originalBytes = await picked.readAsBytes();
     if (originalBytes.lengthInBytes > 15 * 1024 * 1024) {
-      setState(() => _statusMessage = '画像サイズは15MB以内にしてください。');
+      _showStatusSnackBar('画像サイズは15MB以内にしてください。', isError: true);
       return;
     }
     final adjustedBytes = await _showAvatarAdjustDialog(originalBytes);
     if (adjustedBytes == null) return;
-    setState(() {
-      _isUpdatingProfile = true;
-      _statusMessage = null;
-    });
+    setState(() => _isUpdatingProfile = true);
     try {
       final path =
           'avatars/${user.id}_${DateTime.now().millisecondsSinceEpoch}${picked.name.contains('.') ? picked.name.substring(picked.name.lastIndexOf('.')) : '.jpg'}';
@@ -921,9 +1581,9 @@ class _ProfileTabState extends State<ProfileTab> {
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(data: {'avatar_url': publicUrl}),
       );
-      setState(() => _statusMessage = 'アバターを更新しました。');
+      _showStatusSnackBar('アバターを更新しました。');
     } catch (e) {
-      setState(() => _statusMessage = 'アバター更新に失敗しました: $e');
+      _showStatusSnackBar('アバター更新に失敗しました。${_friendlyErrorMessage(e)}', isError: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -962,17 +1622,14 @@ class _ProfileTabState extends State<ProfileTab> {
     if (shouldSave != true) return;
     final newName = controller.text.trim();
     if (newName.isEmpty) return;
-    setState(() {
-      _isUpdatingProfile = true;
-      _statusMessage = null;
-    });
+    setState(() => _isUpdatingProfile = true);
     try {
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(data: {'name': newName}),
       );
-      setState(() => _statusMessage = '名前を更新しました。');
+      _showStatusSnackBar('名前を更新しました。');
     } catch (e) {
-      setState(() => _statusMessage = '名前の更新に失敗しました: $e');
+      _showStatusSnackBar('名前の更新に失敗しました。${_friendlyErrorMessage(e)}', isError: true);
     } finally {
       if (mounted) {
         setState(() => _isUpdatingProfile = false);

@@ -20,6 +20,7 @@ class ProductDetailSheet extends StatefulWidget {
 }
 
 class _ProductDetailSheetState extends State<ProductDetailSheet> {
+  static const int _communityRadiusMeters = 3000;
   final SupabaseService _supabaseService = SupabaseService();
   final NumberFormat _priceFormat = NumberFormat.currency(
     symbol: '¥',
@@ -104,7 +105,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         productName: productName,
         lat: position.latitude,
         lng: position.longitude,
-        radiusMeters: 5000, // Match list view radius
+        radiusMeters: _communityRadiusMeters,
         recentDays: 7, // Cover "5 days ago" items safely
       );
       debugPrint(
@@ -166,12 +167,44 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
 
                   _buildYourRecordCard(userPrice),
                   const SizedBox(height: 20),
-                  const Text(
-                    'コミュニティ情報',
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'コミュニティ情報',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Color(0xFF242424),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '${_communityRadiusMeters ~/ 1000}km圏内',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                            color: Color(0xFF444444),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '現在地から約${_communityRadiusMeters ~/ 1000}km以内の最新価格を表示します。',
                     style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Color(0xFF242424),
+                      color: Colors.grey.shade700,
+                      fontSize: 12,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -371,6 +404,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         borderColor: Colors.grey.shade300,
         title: '近くに最近のデータがありません。',
         icon: Icons.info_outline,
+        subtitle: '${_communityRadiusMeters ~/ 1000}km圏内で価格情報がまだありません。',
       );
     }
 
@@ -428,7 +462,7 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
       borderColor: Colors.amber.shade200,
       title: 'あなたが最安値です！',
       icon: Icons.emoji_events,
-      subtitle: '近くにより安い価格は見つかりませんでした。',
+      subtitle: '${_communityRadiusMeters ~/ 1000}km圏内により安い価格は見つかりませんでした。',
     );
   }
 

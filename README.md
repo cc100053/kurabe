@@ -17,6 +17,7 @@ Premium, modern UI inspired by Airbnb, Headspace, and Japanese fintech apps (Pay
 - **Smart Add/Edit**: Camera capture, AI tag parsing (Gemini 1.5), discounts, quantity, unit price, taxed total, best-price check
 - **Supabase Backend**: `price_records` table with user_id scoping, image uploads to `price_tags` bucket
 - **Auth**: Guest, Google, Apple, email; guest-to-user data migration
+- **Recovery**: Forgot-password email triggers in-app reset dialog via Supabase deep link; existing-email login for guests to merge data
 - **Catalog**: Categories grid with glassmorphism cards, category detail with "My Records" vs "Community Nearby" toggle, confirmation counts, cheapest badge per product
 - **Search**: Fuzzy product search RPC, community search gated for registered users
 - **Profile**: Gradient header, stats dashboard, grouped settings
@@ -54,7 +55,7 @@ Key packages:
 
 - Required tables/RPCs: `price_records` (see progress.md for columns) and RPCs `get_nearby_cheapest`, `search_products_fuzzy`, `get_nearby_records_by_category`, `transfer_guest_data`
 - Shopping list: add table `shopping_list_items` (id bigserial PK, user_id uuid FK auth.users not null, title text not null, is_done bool default false, created_at timestamptz default now()) with RLS allowing select/insert/update/delete when `auth.uid() = user_id`.
-- Auth redirect setup: keep `io.supabase.flutter://login-callback/` and the Supabase hosted callback in Supabase Auth → Redirect URLs; iOS Info.plist registers the `io.supabase.flutter` scheme for handoff.
+- Auth redirect setup: keep `io.supabase.flutter://login-callback/` and the Supabase hosted callback in Supabase Auth → Redirect URLs; iOS Info.plist registers the `io.supabase.flutter` scheme for handoff. Password recovery uses the same redirect and is handled in-app.
 - Community endpoints expect authenticated users (anon is blocked in-app). Ensure RLS matches your privacy needs
 - Storage bucket `price_tags` must allow authenticated uploads; public read is used for image URLs
 

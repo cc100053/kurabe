@@ -242,7 +242,7 @@ class SupabaseService {
     required String categoryTag,
     required double lat,
     required double lng,
-    int radiusMeters = 5000,
+    int radiusMeters = 3000,
   }) async {
     final trimmed = categoryTag.trim();
     if (trimmed.isEmpty) return [];
