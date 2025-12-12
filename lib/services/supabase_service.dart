@@ -9,6 +9,7 @@ class SupabaseService {
 
   final SupabaseClient _client;
   static bool _userIdColumnMissing = false;
+  static bool _taxRateColumnMissing = false;
 
   bool get isGuest => _client.auth.currentUser?.isAnonymous ?? true;
 
@@ -32,6 +33,9 @@ class SupabaseService {
     final userId = _client.auth.currentUser?.id;
     if (userId != null && !_userIdColumnMissing) {
       payload['user_id'] = userId;
+    }
+    if (_taxRateColumnMissing) {
+      payload.remove('tax_rate');
     }
 
     final productName = payload['product_name'] as String?;
@@ -74,6 +78,16 @@ class SupabaseService {
     try {
       await _client.from('price_records').insert(payload);
     } on PostgrestException catch (e) {
+      final missingTaxRate = e.code == 'PGRST204' &&
+          (e.message.toLowerCase().contains('tax_rate') ||
+              e.message.toLowerCase().contains('tax rate'));
+      if (missingTaxRate && payload.containsKey('tax_rate')) {
+        _taxRateColumnMissing = true;
+        final retryPayload = Map<String, dynamic>.from(payload)
+          ..remove('tax_rate');
+        await _client.from('price_records').insert(retryPayload);
+        return;
+      }
       final missingUserId = e.code == 'PGRST204' &&
           (e.message.toLowerCase().contains('user_id') ||
               e.message.toLowerCase().contains('user id'));

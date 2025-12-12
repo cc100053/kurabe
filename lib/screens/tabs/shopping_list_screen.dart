@@ -40,14 +40,6 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
       _isLoading = true;
       _error = null;
     });
-    if (_service.isGuest) {
-      setState(() {
-        _isLoading = false;
-        _items = [];
-        _error = 'ゲストモードでは利用できません。ログインしてください。';
-      });
-      return;
-    }
 
     try {
       final items = await _service.fetchItems();

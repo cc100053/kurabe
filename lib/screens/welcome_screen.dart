@@ -525,30 +525,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Future<void> _signUpWithEmail(String email, String password) async {
     await _runAuthAction(() async {
       final auth = Supabase.instance.client.auth;
-      // Try login first to detect existing accounts and avoid duplicate sign-up attempts.
-      try {
-        final loginResp = await auth.signInWithPassword(
-          email: email,
-          password: password,
-        );
-        if (loginResp.session != null) {
-          return '既存のアカウントにログインしました。';
-        }
-      } on AuthException catch (loginError) {
-        final msg = loginError.message.toLowerCase();
-        final invalid = msg.contains('invalid') || msg.contains('credentials');
-        if (invalid) {
-          await _showExistingAccountDialog(email);
-          setState(() {
-            _isSignUpMode = false;
-            _emailController.text = email;
-          });
-          _showStatusSnackBar('既存のアカウントの可能性があります。ログインしてください。', isError: true);
-          return null;
-        } else {
-          rethrow;
-        }
-      }
       try {
         final response = await auth.signUp(
           email: email,
@@ -563,7 +539,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         final alreadyRegistered =
             msg.contains('already') && msg.contains('registered');
         if (alreadyRegistered) {
-          // Switch to login mode and prefill email so user can sign in.
           setState(() {
             _isSignUpMode = false;
             _emailController.text = email;
@@ -574,24 +549,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         rethrow;
       }
     });
-  }
-
-  Future<void> _showExistingAccountDialog(String email) async {
-    await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('既存アカウントの可能性'),
-        content: Text(
-          'このメールは既に登録済みの可能性があります。ログインを試してください。\n\n$email',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('ログインする'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _loginWithEmail(String email, String password) async {

@@ -9,9 +9,17 @@ class ShoppingListService {
   final SupabaseClient _client;
 
   bool get isGuest => _client.auth.currentUser?.isAnonymous ?? true;
+  String? get _userId => _client.auth.currentUser?.id;
+  String? get _anonId => _client.auth.currentUser?.isAnonymous == true
+      ? _client.auth.currentUser?.id
+      : null;
+
+  /// For guests, we store items locally in Supabase under a per-device pseudo user id
+  /// (auth uid when anonymous). That allows syncing across sessions on the same device
+  /// and seamless migration when they later sign in.
 
   Future<List<ShoppingListItem>> fetchItems() async {
-    final userId = _client.auth.currentUser?.id;
+    final userId = _userId ?? _anonId;
     if (userId == null) return [];
 
     final List<dynamic> rows = await _client
@@ -32,7 +40,7 @@ class ShoppingListService {
     if (trimmed.isEmpty) {
       throw ArgumentError('title cannot be empty');
     }
-    final userId = _client.auth.currentUser?.id;
+    final userId = _userId ?? _anonId;
     if (userId == null) {
       throw StateError('no user');
     }

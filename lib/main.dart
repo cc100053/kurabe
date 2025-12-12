@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:flutter/widgets.dart';
 
 import 'providers/app_state.dart';
 import 'screens/main_scaffold.dart';
@@ -15,9 +14,15 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _loadEnv();
   await initializeDateFormatting('ja_JP', null);
+  final supabaseUrl = dotenv.env['SUPABASE_URL'];
+  final supabaseAnonKey = dotenv.env['SUPABASE_ANON_KEY'];
+  if (supabaseUrl == null || supabaseAnonKey == null) {
+    runApp(const _MissingEnvApp());
+    return;
+  }
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,
     ),
@@ -515,5 +520,42 @@ class _KurabeAppState extends State<KurabeApp> {
     } else {
       _resetDialogOpen = false;
     }
+  }
+}
+
+class _MissingEnvApp extends StatelessWidget {
+  const _MissingEnvApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: KurabeColors.background,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.warning_amber_rounded, size: 48, color: KurabeColors.error),
+                SizedBox(height: 16),
+                Text(
+                  '環境変数が不足しています',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'SUPABASE_URL と SUPABASE_ANON_KEY を設定してください (.env やビルド設定で注入)。',
+                  style: TextStyle(fontSize: 14, color: KurabeColors.textSecondary, height: 1.5),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -51,8 +51,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
   final GooglePlacesService _placeService = GooglePlacesService();
   final SupabaseService _supabaseService = SupabaseService();
 
-  bool _isTaxIncluded = true;
-  final double _taxRate = 0.08;
+  bool _isTaxIncluded = false;
+  double _taxRate = 0.10;
   bool _isSaving = false;
   bool _isSavingDialogVisible = false;
   bool _isFetchingShops = false;
@@ -76,6 +76,9 @@ class _AddEditScreenState extends State<AddEditScreen> {
     _productController.addListener(_onNameChanged);
     _hydratePrefetchedShops();
     _selectedCategory = 'その他';
+    _isTaxIncluded = false;
+    _taxRate = 0.10;
+    _applyCategoryTax(_selectedCategory);
     _calculateFinalPrice();
   }
 
@@ -179,7 +182,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
       _priceType = 'standard';
       _productController.clear();
       _selectedCategory = 'その他';
-      _isTaxIncluded = true;
+      _isTaxIncluded = false;
+      _applyCategoryTax(_selectedCategory);
       _isAnalyzingImage = true;
       _setInsightState(_InsightState.idle);
       _suggestionChips = [];
@@ -238,8 +242,9 @@ class _AddEditScreenState extends State<AddEditScreen> {
       debugPrint('Gemini解析に失敗しました: $e');
       debugPrintStack(stackTrace: stack);
       if (mounted) {
+        final message = _friendlyGeminiError(e);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('AIがタグを読み取れませんでした')),
+          SnackBar(content: Text(message)),
         );
       }
     } finally {
@@ -247,6 +252,17 @@ class _AddEditScreenState extends State<AddEditScreen> {
         setState(() => _isAnalyzingImage = false);
       }
     }
+  }
+
+  String _friendlyGeminiError(Object error) {
+    final text = error.toString().toLowerCase();
+    if (text.contains('503') || text.contains('unavailable') || text.contains('overloaded')) {
+      return 'AIが混み合っています。少し待ってから再試行してください。';
+    }
+    if (text.contains('api key') || text.contains('gemini_api_key')) {
+      return 'Gemini APIキーが設定されていません。.envにGEMINI_API_KEYを設定してください。';
+    }
+    return 'AIがタグを読み取れませんでした。もう一度お試しください。';
   }
 
   void _clearSelectedShopCoordinates() {
@@ -266,6 +282,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
     } else {
       _selectedCategory = 'その他';
     }
+    _applyCategoryTax(_selectedCategory);
   }
 
   Future<void> _hydratePrefetchedShops() async {
@@ -433,9 +450,10 @@ class _AddEditScreenState extends State<AddEditScreen> {
       final shop = cheapest['shop_name'] as String?;
       final distance = (cheapest['distance_meters'] as num?)?.toDouble();
 
-      final currentUnitPrice = _unitPrice ?? _computePricing()?.$2;
+      final currentUnitPrice = _currentComparableUnitPrice();
+      // Treat as best only when strictly cheaper (ties are not flagged)
       final isBest = currentUnitPrice != null && nearbyUnitPrice != null
-          ? currentUnitPrice <= nearbyUnitPrice
+          ? currentUnitPrice < (nearbyUnitPrice - 0.01)
           : false;
       setState(() {
         _setInsightState(
@@ -583,7 +601,9 @@ class _AddEditScreenState extends State<AddEditScreen> {
     }
     if (discounted < 0) discounted = 0;
     final unitPrice = discounted / quantity;
-    final finalTaxedTotal = (discounted * (1 + _taxRate)).floorToDouble();
+    final finalTaxedTotal = _isTaxIncluded
+        ? discounted
+        : (discounted * (1 + _taxRate)).floorToDouble();
     return (discounted, unitPrice, finalTaxedTotal);
   }
 
@@ -594,6 +614,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
       _unitPrice = pricing?.$2;
       _finalTaxedTotal = pricing?.$3;
     });
+    // Refresh community insight when price changes so “最安値” reflects edits.
+    _scheduleInsightLookup();
   }
 
   String _discountTypeToDb(_DiscountType type) {
@@ -611,84 +633,497 @@ class _AddEditScreenState extends State<AddEditScreen> {
     if (_finalTaxedTotal == null && _unitPrice == null) {
       return const SizedBox.shrink();
     }
-    return Card(
-      color: Colors.orange.shade50,
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: KurabeColors.primary.withAlpha(20),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          if (_finalTaxedTotal != null) ...[
+            Text(
+              '税込 ¥${_finalTaxedTotal!.toStringAsFixed(0)}',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: KurabeColors.primary,
+              ),
+            ),
+          ],
+          if (_unitPrice != null && _parseQuantity() > 1) ...[
+            const SizedBox(width: 12),
+            Text(
+              '(@¥${_unitPrice!.toStringAsFixed(0)})',
+              style: const TextStyle(fontSize: 13, color: KurabeColors.textSecondary),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaxControls() {
+    return Row(
+      children: [
+        const Text(
+          '税:',
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        ),
+        const SizedBox(width: 8),
+        ToggleButtons(
+          isSelected: [_isTaxIncluded, !_isTaxIncluded],
+          borderRadius: BorderRadius.circular(10),
+          borderColor: KurabeColors.border,
+          selectedBorderColor: KurabeColors.primary,
+          selectedColor: Colors.white,
+          color: KurabeColors.textSecondary,
+          fillColor: KurabeColors.primary,
+          constraints: const BoxConstraints(minHeight: 34, minWidth: 50),
+          onPressed: (index) {
+            setState(() {
+              _isTaxIncluded = index == 0;
+            });
+            _calculateFinalPrice();
+          },
+          children: const [
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Text('込', style: TextStyle(fontSize: 13)),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Text('抜', style: TextStyle(fontSize: 13)),
+            ),
+          ],
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _buildModernTaxRateDropdown(),
+        ),
+      ],
+    );
+  }
+
+  final GlobalKey _taxRateDropdownKey = GlobalKey();
+
+  Widget _buildModernTaxRateDropdown() {
+    final taxRateOptions = [
+      _TaxRateOption(
+        value: 0.08,
+        label: '8%',
+        subtitle: '軽減税率',
+        icon: PhosphorIcons.leaf(PhosphorIconsStyle.fill),
+        iconColor: KurabeColors.success,
+      ),
+      _TaxRateOption(
+        value: 0.10,
+        label: '10%',
+        subtitle: '標準税率',
+        icon: PhosphorIcons.percent(PhosphorIconsStyle.fill),
+        iconColor: KurabeColors.primary,
+      ),
+    ];
+
+    final selectedOption = taxRateOptions.firstWhere(
+      (o) => o.value == _taxRate,
+      orElse: () => taxRateOptions.last,
+    );
+
+    return GestureDetector(
+      key: _taxRateDropdownKey,
+      onTap: () => _showTaxRatePopup(taxRateOptions),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: KurabeColors.surfaceElevated,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: KurabeColors.border),
+        ),
+        child: Row(
           children: [
-            if (_finalTaxedTotal != null) ...[
-              const Text(
-                '最終合計（税込）',
-                style: TextStyle(fontWeight: FontWeight.w600),
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: selectedOption.iconColor.withAlpha(26),
+                borderRadius: BorderRadius.circular(6),
               ),
-              Text(
-                '¥${_finalTaxedTotal!.toStringAsFixed(0)}',
+              child: Icon(
+                selectedOption.icon,
+                size: 14,
+                color: selectedOption.iconColor,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${selectedOption.label} ${selectedOption.subtitle}',
                 style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: KurabeColors.textPrimary,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 6),
-            ],
-            if (_unitPrice != null)
-              Text(
-                '1個あたり ¥${_unitPrice!.toStringAsFixed(0)}',
-                style: const TextStyle(color: Colors.black54),
-              ),
+            ),
+            Icon(
+              PhosphorIcons.caretDown(PhosphorIconsStyle.bold),
+              size: 16,
+              color: KurabeColors.textTertiary,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInsightCard() {
-    if (_insightState == _InsightState.idle) return const SizedBox.shrink();
-    final radiusKm = _insightRadiusMeters ~/ 1000;
-    Color bg;
-    String text;
-    if (_insightState == _InsightState.loading) {
-      bg = Colors.grey.shade200;
-      text = 'コミュニティ価格を確認中...（約${radiusKm}km圏内）';
-    } else if (_insightState == _InsightState.none) {
-      bg = Colors.grey.shade200;
-      text =
-          '近くに最近のデータがありません（約${radiusKm}km圏内）。最初の記録者になりましょう！';
-    } else if (_insightState == _InsightState.best) {
-      bg = Colors.amber.shade200;
-      text = '付近で最安値を見つけました！';
-      if (_insightPrice != null && _insightShop != null) {
-        final distanceText = _insightDistanceMeters != null
-            ? ' • ${_formatDistance(_insightDistanceMeters!)}'
-            : '';
-        text =
-            '付近で最安値を見つけました！(¥${_insightPrice!.round()} • $_insightShop$distanceText)';
-      }
-    } else {
-      bg = Colors.green.shade200;
-      final priceText = _insightPrice != null
-          ? '¥${_insightPrice!.round()}'
-          : 'より安い価格';
-      final shopText = _insightShop ?? '近くの店舗';
-      final distanceText = _insightDistanceMeters != null
-          ? ' (${_formatDistance(_insightDistanceMeters!)})'
-          : '';
-      text =
-          'より安い価格を発見！$shopTextで$priceText$distanceText（約${radiusKm}km圏内）';
+  Future<void> _showTaxRatePopup(List<_TaxRateOption> options) async {
+    final RenderBox renderBox = _taxRateDropdownKey.currentContext!.findRenderObject() as RenderBox;
+    final Offset offset = renderBox.localToGlobal(Offset.zero);
+    final Size size = renderBox.size;
+
+    final result = await showMenu<double>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        offset.dx,
+        offset.dy + size.height + 4,
+        offset.dx + size.width,
+        offset.dy + size.height + 200,
+      ),
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: KurabeColors.surfaceElevated,
+      items: options.map((option) {
+        final isSelected = option.value == _taxRate;
+        return PopupMenuItem<double>(
+          value: option.value,
+          padding: EdgeInsets.zero,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isSelected ? KurabeColors.primary.withAlpha(20) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: option.iconColor.withAlpha(26),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    option.icon,
+                    size: 18,
+                    color: option.iconColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        option.label,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                          color: isSelected ? KurabeColors.primary : KurabeColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        option.subtitle,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: KurabeColors.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isSelected)
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: const BoxDecoration(
+                      color: KurabeColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+
+    if (result != null && result != _taxRate) {
+      setState(() => _taxRate = result);
+      _calculateFinalPrice();
     }
-    return Card(
-      color: bg,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
+  }
+
+  final GlobalKey _priceTypeDropdownKey = GlobalKey();
+
+  Widget _buildModernPriceTypeDropdown() {
+    final priceTypeOptions = [
+      (
+        value: 'standard',
+        label: '通常',
+        subtitle: '通常価格',
+        icon: PhosphorIcons.tag(PhosphorIconsStyle.fill),
+        iconColor: KurabeColors.primary,
+      ),
+      (
+        value: 'promo',
+        label: '特価',
+        subtitle: 'セール・特売',
+        icon: PhosphorIcons.sparkle(PhosphorIconsStyle.fill),
+        iconColor: KurabeColors.accent,
+      ),
+      (
+        value: 'clearance',
+        label: '見切り',
+        subtitle: '在庫処分',
+        icon: PhosphorIcons.timer(PhosphorIconsStyle.fill),
+        iconColor: KurabeColors.error,
+      ),
+    ];
+
+    final selectedOption = priceTypeOptions.firstWhere(
+      (o) => o.value == _priceType,
+      orElse: () => priceTypeOptions.first,
+    );
+
+    return GestureDetector(
+      key: _priceTypeDropdownKey,
+      onTap: () => _showPriceTypePopup(priceTypeOptions),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: KurabeColors.surfaceElevated,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: KurabeColors.border),
+        ),
         child: Row(
           children: [
-            const Icon(Icons.insights, color: Colors.black54),
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: selectedOption.iconColor.withAlpha(26),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(
+                selectedOption.icon,
+                size: 14,
+                color: selectedOption.iconColor,
+              ),
+            ),
             const SizedBox(width: 8),
-            Expanded(child: Text(text)),
+            Expanded(
+              child: Text(
+                selectedOption.label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: KurabeColors.textPrimary,
+                ),
+              ),
+            ),
+            Icon(
+              PhosphorIcons.caretDown(PhosphorIconsStyle.bold),
+              size: 16,
+              color: KurabeColors.textTertiary,
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _showPriceTypePopup(List<({String value, String label, String subtitle, IconData icon, Color iconColor})> options) async {
+    final RenderBox renderBox = _priceTypeDropdownKey.currentContext!.findRenderObject() as RenderBox;
+    final Offset offset = renderBox.localToGlobal(Offset.zero);
+    final Size size = renderBox.size;
+
+    final result = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        offset.dx,
+        offset.dy + size.height + 4,
+        offset.dx + size.width,
+        offset.dy + size.height + 250,
+      ),
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: KurabeColors.surfaceElevated,
+      items: options.map((option) {
+        final isSelected = option.value == _priceType;
+        return PopupMenuItem<String>(
+          value: option.value,
+          padding: EdgeInsets.zero,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: isSelected ? KurabeColors.primary.withAlpha(20) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: option.iconColor.withAlpha(26),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    option.icon,
+                    size: 18,
+                    color: option.iconColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        option.label,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                          color: isSelected ? KurabeColors.primary : KurabeColors.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        option.subtitle,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: KurabeColors.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isSelected)
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: const BoxDecoration(
+                      color: KurabeColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+
+    if (result != null && result != _priceType) {
+      setState(() => _priceType = result);
+    }
+  }
+
+  Widget _buildInsightCard() {
+    if (_insightState == _InsightState.idle) return const SizedBox.shrink();
+    
+    IconData icon;
+    Color iconColor;
+    Color bgColor;
+    String title;
+    String? subtitle;
+
+    if (_insightState == _InsightState.loading) {
+      icon = Icons.search;
+      iconColor = KurabeColors.textTertiary;
+      bgColor = KurabeColors.divider;
+      title = '周辺の価格を検索中...';
+    } else if (_insightState == _InsightState.none) {
+      icon = Icons.add_circle_outline;
+      iconColor = KurabeColors.primary;
+      bgColor = KurabeColors.primary.withAlpha(20);
+      title = '周辺に記録なし';
+      subtitle = 'この商品の最初の投稿者になろう！';
+    } else if (_insightState == _InsightState.best) {
+      icon = Icons.emoji_events;
+      iconColor = Colors.amber.shade700;
+      bgColor = Colors.amber.shade100;
+      title = '周辺最安値！';
+      if (_insightPrice != null && _insightShop != null) {
+        final distance = _insightDistanceMeters != null 
+            ? _formatDistance(_insightDistanceMeters!) 
+            : '';
+        subtitle = '次点: $_insightShop ¥${_insightPrice!.round()} $distance';
+      }
+    } else {
+      // _InsightState.found - there's a cheaper price nearby
+      icon = Icons.local_offer;
+      iconColor = KurabeColors.success;
+      bgColor = KurabeColors.success.withAlpha(20);
+      final priceText = _insightPrice != null ? '¥${_insightPrice!.round()}' : '';
+      final shopText = _insightShop ?? '';
+      final distance = _insightDistanceMeters != null 
+          ? _formatDistance(_insightDistanceMeters!) 
+          : '';
+      title = 'より安い店舗あり';
+      subtitle = '$shopText $priceText $distance'.trim();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: iconColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: KurabeColors.textPrimary,
+                  ),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: KurabeColors.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -782,6 +1217,47 @@ class _AddEditScreenState extends State<AddEditScreen> {
     });
   }
 
+  void _applyCategoryTax(String? category) {
+    const foodCategories = {
+      '野菜',
+      '果物',
+      '精肉',
+      '鮮魚',
+      '惣菜',
+      '卵',
+      '乳製品',
+      '豆腐・納豆・麺',
+      'パン',
+      '米・穀物',
+      '調味料',
+      'インスタント',
+      '飲料',
+      'お菓子',
+      '冷凍食品',
+    };
+    final isFood = category != null && foodCategories.contains(category);
+    final newRate = isFood ? 0.08 : 0.10;
+    if (_taxRate != newRate) {
+      if (mounted) {
+        setState(() {
+          _taxRate = newRate;
+        });
+      } else {
+        _taxRate = newRate;
+      }
+      _calculateFinalPrice();
+    }
+  }
+
+  double? _currentComparableUnitPrice() {
+    final pricing = _computePricing();
+    if (pricing == null) return null;
+    final quantity = _parseQuantity();
+    final taxedTotal = pricing.$3;
+    if (taxedTotal == null || quantity <= 0) return null;
+    return taxedTotal / quantity;
+  }
+
   void _hideSavingDialog() {
     if (_isSavingDialogVisible &&
         Navigator.of(context, rootNavigator: true).canPop()) {
@@ -834,6 +1310,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
         'discount_type': _discountTypeToDb(_selectedDiscountType),
         'discount_value': discountValue,
         'is_tax_included': _isTaxIncluded,
+        'tax_rate': _taxRate,
         'shop_name': shop,
         'shop_lat': _selectedShopLat,
         'shop_lng': _selectedShopLng,
@@ -865,7 +1342,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('記録を追加')),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -878,8 +1355,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: SizedBox(
-                        width: 200,
-                        height: 280,
+                        width: 160,
+                        height: 180,
                         child: _imageFile != null
                             ? Image.file(_imageFile!, fit: BoxFit.cover)
                             : Container(
@@ -889,14 +1366,14 @@ class _AddEditScreenState extends State<AddEditScreen> {
                                   children: const [
                                     Icon(
                                       Icons.camera_alt,
-                                      size: 48,
+                                      size: 36,
                                       color: Colors.black54,
                                     ),
-                                    SizedBox(height: 12),
+                                    SizedBox(height: 8),
                                     Text(
-                                      'タップしてスキャン',
+                                      'スキャン',
                                       style: TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 14,
                                         color: Colors.black54,
                                       ),
                                     ),
@@ -921,9 +1398,9 @@ class _AddEditScreenState extends State<AddEditScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _buildInsightCard(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             TextField(
               controller: _productController,
               decoration: const InputDecoration(labelText: '商品名'),
@@ -949,25 +1426,25 @@ class _AddEditScreenState extends State<AddEditScreen> {
                     .toList(),
               ),
             ],
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             TextField(
               controller: _originalPriceController,
               decoration: const InputDecoration(
-                labelText: '元の価格（値札）',
-                helperText: '割引前の印刷された価格を入力',
+                labelText: '元の価格',
+                isDense: true,
               ),
               keyboardType: TextInputType.number,
               onChanged: (_) => _calculateFinalPrice(),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _quantityController,
                     decoration: const InputDecoration(
-                      labelText: 'セット数量',
-                      hintText: '例: 3個セットの場合は3',
+                      labelText: '数量',
+                      isDense: true,
                     ),
                     keyboardType: TextInputType.number,
                     onChanged: (_) => _calculateFinalPrice(),
@@ -975,55 +1452,33 @@ class _AddEditScreenState extends State<AddEditScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('price-type-$_priceType'),
-                    initialValue: _priceType,
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'standard',
-                        child: Text('通常'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'promo',
-                        child: Text('特価'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'clearance',
-                        child: Text('見切り'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _priceType = value);
-                      }
-                    },
-                    decoration: const InputDecoration(labelText: '価格タイプ'),
-                  ),
+                  child: _buildModernPriceTypeDropdown(),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 8),
+            _buildTaxControls(),
+            const SizedBox(height: 8),
+            Row(
               children: [
                 const Text(
-                  '割引',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  '割引:',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(width: 8),
                 ToggleButtons(
                   isSelected: [
                     _selectedDiscountType == _DiscountType.none,
                     _selectedDiscountType == _DiscountType.percentage,
                     _selectedDiscountType == _DiscountType.fixedAmount,
                   ],
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(10),
                   borderColor: KurabeColors.border,
                   selectedBorderColor: KurabeColors.primary,
                   selectedColor: Colors.white,
                   color: KurabeColors.textSecondary,
                   fillColor: KurabeColors.primary,
-                  constraints: const BoxConstraints(minHeight: 38, minWidth: 72),
+                  constraints: const BoxConstraints(minHeight: 34, minWidth: 48),
                   onPressed: (index) {
                     setState(() {
                       _selectedDiscountType = switch (index) {
@@ -1039,34 +1494,42 @@ class _AddEditScreenState extends State<AddEditScreen> {
                   },
                   children: const [
                     Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('なし'),
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Text('なし', style: TextStyle(fontSize: 12)),
                     ),
                     Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('% 引き'),
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Text('%', style: TextStyle(fontSize: 12)),
                     ),
                     Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('¥ 引き'),
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Text('¥', style: TextStyle(fontSize: 12)),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _discountValueController,
-                  decoration: const InputDecoration(labelText: '割引額'),
-                  enabled: _selectedDiscountType != _DiscountType.none,
-                  keyboardType: TextInputType.number,
-                  onChanged: (_) => _calculateFinalPrice(),
-                ),
+                if (_selectedDiscountType != _DiscountType.none) ...[
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 80,
+                    child: TextField(
+                      controller: _discountValueController,
+                      decoration: const InputDecoration(
+                        labelText: '値',
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                      keyboardType: TextInputType.number,
+                      onChanged: (_) => _calculateFinalPrice(),
+                    ),
+                  ),
+                ],
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _buildPriceSummary(),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _buildCategoryPicker(),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
@@ -1124,68 +1587,49 @@ class _AddEditScreenState extends State<AddEditScreen> {
     final icon =
         visual?.icon ?? PhosphorIcons.tagSimple(PhosphorIconsStyle.bold);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'カテゴリを選択',
-          style: TextStyle(fontWeight: FontWeight.w700),
+    return GestureDetector(
+      onTap: _showCategorySheet,
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'カテゴリ',
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         ),
-        const SizedBox(height: 8),
-        GestureDetector(
-          onTap: _showCategorySheet,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: KurabeColors.surfaceElevated,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: KurabeColors.border),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(10),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+        child: Row(
+          children: [
+            Container(
+              height: 28,
+              width: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: (visual?.color ?? KurabeColors.surface).withAlpha(200),
+              ),
+              child: Icon(
+                icon,
+                size: 14,
+                color: KurabeColors.primary,
+              ),
             ),
-            child: Row(
-              children: [
-                Container(
-                  height: 38,
-                  width: 38,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: (visual?.color ?? KurabeColors.surface)
-                        .withAlpha(200),
-                  ),
-                  child: Icon(
-                    icon,
-                    size: 20,
-                    color: KurabeColors.primary,
-                  ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                selected,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    selected,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-                Icon(
-                  _isCategorySheetOpen
-                      ? PhosphorIcons.caretUp(PhosphorIconsStyle.bold)
-                      : PhosphorIcons.caretDown(PhosphorIconsStyle.bold),
-                  color: KurabeColors.textSecondary,
-                  size: 18,
-                ),
-              ],
+              ),
             ),
-          ),
+            Icon(
+              _isCategorySheetOpen
+                  ? PhosphorIcons.caretUp(PhosphorIconsStyle.bold)
+                  : PhosphorIcons.caretDown(PhosphorIconsStyle.bold),
+              color: KurabeColors.textSecondary,
+              size: 16,
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -1240,7 +1684,10 @@ class _AddEditScreenState extends State<AddEditScreen> {
                         controller: scrollController,
                         child: _buildCategoryGridBody(
                           onSelect: (name) {
-                            setState(() => _selectedCategory = name);
+                            setState(() {
+                              _selectedCategory = name;
+                              _applyCategoryTax(name);
+                            });
                             Navigator.of(context).pop();
                           },
                         ),
@@ -1371,6 +1818,188 @@ class _AddEditScreenState extends State<AddEditScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+// Helper class for tax rate options
+class _TaxRateOption {
+  final double value;
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final Color iconColor;
+
+  const _TaxRateOption({
+    required this.value,
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.iconColor,
+  });
+}
+
+// Generic dropdown option for bottom sheet
+class _DropdownOption<T> {
+  final T value;
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final Color iconColor;
+
+  const _DropdownOption({
+    required this.value,
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.iconColor,
+  });
+}
+
+// Modern dropdown bottom sheet widget
+class _ModernDropdownSheet<T> extends StatelessWidget {
+  final String title;
+  final List<_DropdownOption<T>> options;
+  final T selectedValue;
+
+  const _ModernDropdownSheet({
+    required this.title,
+    required this.options,
+    required this.selectedValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: KurabeColors.surfaceElevated,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag handle
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: KurabeColors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Title
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+            child: Row(
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: KurabeColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Options list
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+            child: Column(
+              children: options.map((option) {
+                final isSelected = option.value == selectedValue;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => Navigator.pop(context, option.value),
+                      borderRadius: BorderRadius.circular(16),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? KurabeColors.primary.withAlpha(20)
+                              : KurabeColors.background,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected
+                                ? KurabeColors.primary
+                                : KurabeColors.border,
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: option.iconColor.withAlpha(26),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                option.icon,
+                                size: 22,
+                                color: option.iconColor,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    option.label,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w700
+                                          : FontWeight.w600,
+                                      color: isSelected
+                                          ? KurabeColors.primary
+                                          : KurabeColors.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    option.subtitle,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: KurabeColors.textTertiary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: KurabeColors.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.check_rounded,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

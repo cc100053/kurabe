@@ -1263,7 +1263,7 @@ class ProfileTabState extends State<ProfileTab> {
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
+                  color: Colors.black.withValues(alpha: 0.15),
                   blurRadius: 30,
                   offset: const Offset(0, 10),
                 ),
@@ -1292,7 +1292,7 @@ class ProfileTabState extends State<ProfileTab> {
                         width: 64,
                         height: 64,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -1315,7 +1315,7 @@ class ProfileTabState extends State<ProfileTab> {
                         '$scans 回スキャン達成',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                         ),
                       ),
                     ],
@@ -1376,7 +1376,7 @@ class ProfileTabState extends State<ProfileTab> {
                                       boxShadow: [
                                         BoxShadow(
                                           color: levelColors[currentLevelIndex][0]
-                                              .withOpacity(0.4),
+                                              .withValues(alpha: 0.4),
                                           blurRadius: 4,
                                           offset: const Offset(0, 2),
                                         ),
@@ -1416,7 +1416,8 @@ class ProfileTabState extends State<ProfileTab> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: levelColors[currentLevelIndex][0].withOpacity(0.1),
+                            color: levelColors[currentLevelIndex][0]
+                                .withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
