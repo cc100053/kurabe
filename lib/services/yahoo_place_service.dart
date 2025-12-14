@@ -25,14 +25,18 @@ class YahooPlaceService {
       'sort': 'dist',
     };
 
-    final filteredCategories = categoryCodes?.where((code) => code.trim().isNotEmpty).toList() ?? [];
+    final filteredCategories =
+        categoryCodes?.where((code) => code.trim().isNotEmpty).toList() ?? [];
     if (filteredCategories.isNotEmpty) {
       query['gc'] = filteredCategories.join(',');
     }
 
-    final uri = Uri.parse('https://map.yahooapis.jp/search/local/V1/localSearch').replace(queryParameters: query);
+    final uri =
+        Uri.parse('https://map.yahooapis.jp/search/local/V1/localSearch')
+            .replace(queryParameters: query);
 
-    final response = await _client.get(uri).timeout(const Duration(seconds: 10));
+    final response =
+        await _client.get(uri).timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) {
       throw Exception('Yahoo APIエラー ${response.statusCode}');
     }

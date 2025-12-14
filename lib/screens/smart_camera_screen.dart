@@ -68,7 +68,8 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
 
   Future<void> _capturePhoto() async {
     final controller = _controller;
-    if (controller == null || !controller.value.isInitialized || _isCapturing) return;
+    if (controller == null || !controller.value.isInitialized || _isCapturing)
+      return;
     try {
       setState(() => _isCapturing = true);
       final file = await controller.takePicture();
@@ -89,7 +90,8 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
 
   Future<String> _saveCapture(XFile xfile) async {
     final directory = await getApplicationDocumentsDirectory();
-    final filename = 'capture_${DateTime.now().millisecondsSinceEpoch}${p.extension(xfile.path)}';
+    final filename =
+        'capture_${DateTime.now().millisecondsSinceEpoch}${p.extension(xfile.path)}';
     final savedPath = p.join(directory.path, filename);
     final bytes = await xfile.readAsBytes();
     final file = File(savedPath);
@@ -119,7 +121,8 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
               ),
             )
           : !_isCameraReady || controller == null
-              ? const Center(child: CircularProgressIndicator(color: Colors.white))
+              ? const Center(
+                  child: CircularProgressIndicator(color: Colors.white))
               : Stack(
                   fit: StackFit.expand,
                   children: [
@@ -140,7 +143,8 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
                                 ? const SizedBox(
                                     width: 28,
                                     height: 28,
-                                    child: CircularProgressIndicator(strokeWidth: 3),
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 3),
                                   )
                                 : const Icon(Icons.camera_alt, size: 36),
                           ),

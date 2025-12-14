@@ -27,43 +27,50 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   /// Converts auth exceptions to user-friendly Japanese messages
   String _friendlyErrorMessage(dynamic error) {
     final msg = error.toString().toLowerCase();
-    
+
     // Password errors
-    if (msg.contains('password') && (msg.contains('6') || msg.contains('least'))) {
+    if (msg.contains('password') &&
+        (msg.contains('6') || msg.contains('least'))) {
       return 'パスワードは6文字以上で入力してください。';
     }
     if (msg.contains('weak') && msg.contains('password')) {
       return 'パスワードが弱すぎます。より強力なパスワードを設定してください。';
     }
-    
+
     // Login errors
-    if (msg.contains('invalid') && (msg.contains('login') || msg.contains('credentials'))) {
+    if (msg.contains('invalid') &&
+        (msg.contains('login') || msg.contains('credentials'))) {
       return 'メールアドレスまたはパスワードが正しくありません。';
     }
-    
+
     // Email errors
     if (msg.contains('invalid') && msg.contains('email')) {
       return 'メールアドレスの形式が正しくありません。';
     }
-    if ((msg.contains('email') || msg.contains('user')) && 
-        msg.contains('already') && 
+    if ((msg.contains('email') || msg.contains('user')) &&
+        msg.contains('already') &&
         (msg.contains('registered') || msg.contains('exists'))) {
       return 'このメールアドレスは既に登録されています。';
     }
-    if (msg.contains('email') && msg.contains('not') && msg.contains('confirmed')) {
+    if (msg.contains('email') &&
+        msg.contains('not') &&
+        msg.contains('confirmed')) {
       return 'メールアドレスが確認されていません。受信箱を確認してください。';
     }
-    
+
     // Network errors
-    if (msg.contains('network') || msg.contains('connection') || msg.contains('timeout') || msg.contains('socket')) {
+    if (msg.contains('network') ||
+        msg.contains('connection') ||
+        msg.contains('timeout') ||
+        msg.contains('socket')) {
       return 'ネットワーク接続に問題があります。接続を確認してください。';
     }
-    
+
     // Rate limiting
     if (msg.contains('rate') && msg.contains('limit')) {
       return 'リクエストが多すぎます。しばらく待ってから再試行してください。';
     }
-    
+
     // Generic fallback
     return '予期せぬエラーが発生しました。もう一度お試しください。';
   }
@@ -71,9 +78,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   /// Shows a floating SnackBar with the given message
   void _showStatusSnackBar(String message, {bool isError = false}) {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -179,7 +186,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               const SizedBox(height: 6),
               // Subtitle with accent
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   color: KurabeColors.primary.withAlpha(20),
                   borderRadius: BorderRadius.circular(20),
@@ -366,8 +374,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 onPressed: _isLoading ? null : _continueAsGuest,
                 isOutlined: true,
               ),
-
-
 
               const SizedBox(height: 32),
             ],

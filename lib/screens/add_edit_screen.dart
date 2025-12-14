@@ -65,10 +65,13 @@ class _AddEditScreenState extends State<AddEditScreen> {
   double? _insightDistanceMeters;
   File? _imageFile;
   List<GooglePlace> _nearbyShops = [];
+  List<PlaceAutocompletePrediction> _shopPredictions = [];
   double? _selectedShopLat;
   double? _selectedShopLng;
   double? _unitPrice;
   double? _finalTaxedTotal;
+  bool _isSearchingShopPredictions = false;
+  Timer? _shopSearchDebounce;
 
   @override
   void initState() {
@@ -92,6 +95,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
     _shopFocusNode.dispose();
     _placeService.dispose();
     _insightDebounce?.cancel();
+    _shopSearchDebounce?.cancel();
     super.dispose();
   }
 
@@ -256,7 +260,9 @@ class _AddEditScreenState extends State<AddEditScreen> {
 
   String _friendlyGeminiError(Object error) {
     final text = error.toString().toLowerCase();
-    if (text.contains('503') || text.contains('unavailable') || text.contains('overloaded')) {
+    if (text.contains('503') ||
+        text.contains('unavailable') ||
+        text.contains('overloaded')) {
       return 'AIが混み合っています。少し待ってから再試行してください。';
     }
     if (text.contains('api key') || text.contains('gemini_api_key')) {
@@ -271,6 +277,117 @@ class _AddEditScreenState extends State<AddEditScreen> {
       _selectedShopLat = null;
       _selectedShopLng = null;
     });
+  }
+
+  void _onShopChanged(String value) {
+    _clearSelectedShopCoordinates();
+    _shopSearchDebounce?.cancel();
+    if (value.trim().isEmpty) {
+      setState(() => _shopPredictions = []);
+      return;
+    }
+    _shopSearchDebounce = Timer(
+      const Duration(milliseconds: 350),
+      () => _fetchShopPredictions(value),
+    );
+  }
+
+  void _clearShopPredictions() {
+    if (_shopPredictions.isEmpty) return;
+    setState(() => _shopPredictions = []);
+  }
+
+  List<PlaceAutocompletePrediction> _sortPredictions(
+    List<PlaceAutocompletePrediction> predictions,
+  ) {
+    final sorted = [...predictions];
+    sorted.sort((a, b) {
+      final da = a.distanceMeters;
+      final db = b.distanceMeters;
+      if (da != null && db != null && da != db) {
+        return da.compareTo(db);
+      }
+      if (da != null && db == null) return -1;
+      if (da == null && db != null) return 1;
+      return a.primaryText.compareTo(b.primaryText);
+    });
+    return sorted;
+  }
+
+  Future<void> _fetchShopPredictions(String query) async {
+    if (_placesApiKey.isEmpty) return;
+    setState(() => _isSearchingShopPredictions = true);
+    try {
+      final cached = LocationService.instance.getFreshLatLng();
+      (double, double)? coords = cached;
+      coords ??= await LocationService.instance.ensureLocation(
+        apiKey: _placesApiKey,
+      );
+      final predictions = await _placeService.autocomplete(
+        apiKey: _placesApiKey,
+        input: query,
+        latitude: coords?.$1,
+        longitude: coords?.$2,
+        radiusMeters: _insightRadiusMeters.toDouble(),
+        languageCode: 'ja',
+      );
+      if (!mounted) return;
+      setState(() => _shopPredictions = _sortPredictions(predictions));
+    } catch (e, stack) {
+      debugPrint('店舗候補の取得に失敗: $e');
+      debugPrintStack(stackTrace: stack);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('店舗候補の取得に失敗しました。もう一度お試しください。'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSearchingShopPredictions = false);
+      }
+    }
+  }
+
+  Future<void> _onShopPredictionTapped(
+    PlaceAutocompletePrediction prediction,
+  ) async {
+    _shopSearchDebounce?.cancel();
+    setState(() => _isSearchingShopPredictions = true);
+    try {
+      final details = await _placeService.fetchPlaceDetails(
+        apiKey: _placesApiKey,
+        placeId: prediction.placeId,
+        languageCode: 'ja',
+      );
+      if (!mounted) return;
+      setState(() {
+        _shopController.text = prediction.primaryText;
+        _selectedShopLat = details?.latitude;
+        _selectedShopLng = details?.longitude;
+        _shopPredictions = [];
+      });
+      if (details == null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('位置情報を取得できませんでした。')),
+        );
+      }
+    } catch (e, stack) {
+      debugPrint('Place詳細取得に失敗: $e');
+      debugPrintStack(stackTrace: stack);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('店舗の詳細取得に失敗しました。もう一度お試しください。'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSearchingShopPredictions = false);
+      }
+    }
   }
 
   void _setCategoryFromString(String? category) {
@@ -294,6 +411,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
         _shopController.text = sorted.first.name;
         _selectedShopLat = sorted.first.latitude;
         _selectedShopLng = sorted.first.longitude;
+        _shopPredictions = [];
       });
       return;
     }
@@ -309,6 +427,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
         _shopController.text = sorted.first.name;
         _selectedShopLat = sorted.first.latitude;
         _selectedShopLng = sorted.first.longitude;
+        _shopPredictions = [];
       });
     }
     if (mounted) {
@@ -541,6 +660,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
       setState(() {
         _selectedShopLat = null;
         _selectedShopLng = null;
+        _shopPredictions = [];
       });
       _shopFocusNode.requestFocus();
       return;
@@ -556,6 +676,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
       _shopController.text = selected;
       _selectedShopLat = chosenPlace?.latitude;
       _selectedShopLng = chosenPlace?.longitude;
+      _shopPredictions = [];
     });
   }
 
@@ -655,7 +776,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
             const SizedBox(width: 12),
             Text(
               '(@¥${_unitPrice!.toStringAsFixed(0)})',
-              style: const TextStyle(fontSize: 13, color: KurabeColors.textSecondary),
+              style: const TextStyle(
+                  fontSize: 13, color: KurabeColors.textSecondary),
             ),
           ],
         ],
@@ -671,106 +793,93 @@ class _AddEditScreenState extends State<AddEditScreen> {
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
         ),
         const SizedBox(width: 8),
-        ToggleButtons(
-          isSelected: [_isTaxIncluded, !_isTaxIncluded],
-          borderRadius: BorderRadius.circular(10),
-          borderColor: KurabeColors.border,
-          selectedBorderColor: KurabeColors.primary,
-          selectedColor: Colors.white,
-          color: KurabeColors.textSecondary,
-          fillColor: KurabeColors.primary,
-          constraints: const BoxConstraints(minHeight: 34, minWidth: 50),
-          onPressed: (index) {
-            setState(() {
-              _isTaxIncluded = index == 0;
-            });
-            _calculateFinalPrice();
-          },
-          children: const [
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Text('込', style: TextStyle(fontSize: 13)),
-            ),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Text('抜', style: TextStyle(fontSize: 13)),
-            ),
-          ],
-        ),
+        // Tax Included Toggle
+        _buildTaxIncludedToggle(),
         const SizedBox(width: 8),
+        // Tax Rate Toggle
         Expanded(
-          child: _buildModernTaxRateDropdown(),
+          child: _buildTaxRateToggle(),
         ),
       ],
     );
   }
 
-  final GlobalKey _taxRateDropdownKey = GlobalKey();
-
-  Widget _buildModernTaxRateDropdown() {
-    final taxRateOptions = [
-      _TaxRateOption(
-        value: 0.08,
-        label: '8%',
-        subtitle: '軽減税率',
-        icon: PhosphorIcons.leaf(PhosphorIconsStyle.fill),
-        iconColor: KurabeColors.success,
-      ),
-      _TaxRateOption(
-        value: 0.10,
-        label: '10%',
-        subtitle: '標準税率',
-        icon: PhosphorIcons.percent(PhosphorIconsStyle.fill),
-        iconColor: KurabeColors.primary,
-      ),
-    ];
-
-    final selectedOption = taxRateOptions.firstWhere(
-      (o) => o.value == _taxRate,
-      orElse: () => taxRateOptions.last,
-    );
-
+  Widget _buildTaxIncludedToggle() {
     return GestureDetector(
-      key: _taxRateDropdownKey,
-      onTap: () => _showTaxRatePopup(taxRateOptions),
+      onTap: () {
+        setState(() {
+          _isTaxIncluded = !_isTaxIncluded;
+        });
+        _calculateFinalPrice();
+      },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        width: 100,
+        height: 34,
         decoration: BoxDecoration(
-          color: KurabeColors.surfaceElevated,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: KurabeColors.border),
+          color: KurabeColors.border,
+          borderRadius: BorderRadius.circular(8),
         ),
-        child: Row(
+        child: Stack(
           children: [
-            Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                color: selectedOption.iconColor.withAlpha(26),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(
-                selectedOption.icon,
-                size: 14,
-                color: selectedOption.iconColor,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '${selectedOption.label} ${selectedOption.subtitle}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: KurabeColors.textPrimary,
+            // Animated sliding background
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              left: _isTaxIncluded ? 2 : null,
+              right: _isTaxIncluded ? null : 2,
+              top: 2,
+              bottom: 2,
+              width: 48,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: KurabeColors.primary,
+                  borderRadius: BorderRadius.circular(6),
+                  boxShadow: [
+                    BoxShadow(
+                      color: KurabeColors.primary.withAlpha(50),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
             ),
-            Icon(
-              PhosphorIcons.caretDown(PhosphorIconsStyle.bold),
-              size: 16,
-              color: KurabeColors.textTertiary,
+            // Labels
+            Row(
+              children: [
+                Expanded(
+                  child: Center(
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 200),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight:
+                            _isTaxIncluded ? FontWeight.w700 : FontWeight.w500,
+                        color: _isTaxIncluded
+                            ? Colors.white
+                            : KurabeColors.textSecondary,
+                      ),
+                      child: const Text('税込'),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 200),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight:
+                            !_isTaxIncluded ? FontWeight.w700 : FontWeight.w500,
+                        color: !_isTaxIncluded
+                            ? Colors.white
+                            : KurabeColors.textSecondary,
+                      ),
+                      child: const Text('税抜'),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -778,97 +887,195 @@ class _AddEditScreenState extends State<AddEditScreen> {
     );
   }
 
-  Future<void> _showTaxRatePopup(List<_TaxRateOption> options) async {
-    final RenderBox renderBox = _taxRateDropdownKey.currentContext!.findRenderObject() as RenderBox;
-    final Offset offset = renderBox.localToGlobal(Offset.zero);
-    final Size size = renderBox.size;
+  Widget _buildTaxRateToggle() {
+    final is8Percent = _taxRate == 0.08;
 
-    final result = await showMenu<double>(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        offset.dx,
-        offset.dy + size.height + 4,
-        offset.dx + size.width,
-        offset.dy + size.height + 200,
-      ),
-      elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: KurabeColors.surfaceElevated,
-      items: options.map((option) {
-        final isSelected = option.value == _taxRate;
-        return PopupMenuItem<double>(
-          value: option.value,
-          padding: EdgeInsets.zero,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: isSelected ? KurabeColors.primary.withAlpha(20) : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _taxRate = is8Percent ? 0.10 : 0.08;
+        });
+        _calculateFinalPrice();
+      },
+      child: Container(
+        width: 130,
+        height: 34,
+        decoration: BoxDecoration(
+          color: KurabeColors.border,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final itemWidth = (constraints.maxWidth - 4) / 2;
+            return Stack(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: option.iconColor.withAlpha(26),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    option.icon,
-                    size: 18,
-                    color: option.iconColor,
+                // Animated sliding background
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeInOut,
+                  left: is8Percent ? 2 : 2 + itemWidth,
+                  top: 2,
+                  bottom: 2,
+                  width: itemWidth,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: is8Percent
+                          ? KurabeColors.success
+                          : KurabeColors.primary,
+                      borderRadius: BorderRadius.circular(6),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (is8Percent
+                                  ? KurabeColors.success
+                                  : KurabeColors.primary)
+                              .withAlpha(50),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        option.label,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                          color: isSelected ? KurabeColors.primary : KurabeColors.textPrimary,
+                // Labels
+                Row(
+                  children: [
+                    Expanded(
+                      child: Center(
+                        child: AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 200),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight:
+                                is8Percent ? FontWeight.w700 : FontWeight.w500,
+                            color: is8Percent
+                                ? Colors.white
+                                : KurabeColors.textSecondary,
+                          ),
+                          child: const Text('8% 軽減'),
                         ),
                       ),
-                      Text(
-                        option.subtitle,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: KurabeColors.textTertiary,
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 200),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight:
+                                !is8Percent ? FontWeight.w700 : FontWeight.w500,
+                            color: !is8Percent
+                                ? Colors.white
+                                : KurabeColors.textSecondary,
+                          ),
+                          child: const Text('10% 標準'),
                         ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiscountTypeToggle() {
+    final selectedIndex = switch (_selectedDiscountType) {
+      _DiscountType.none => 0,
+      _DiscountType.percentage => 1,
+      _DiscountType.fixedAmount => 2,
+    };
+
+    return Container(
+      width: 130,
+      height: 34,
+      decoration: BoxDecoration(
+        color: KurabeColors.border,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final itemWidth = (constraints.maxWidth - 4) / 3;
+          return Stack(
+            children: [
+              // Animated sliding background
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                left: 2 + (selectedIndex * itemWidth),
+                top: 2,
+                bottom: 2,
+                width: itemWidth,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: selectedIndex == 0
+                        ? KurabeColors.textSecondary
+                        : KurabeColors.accent,
+                    borderRadius: BorderRadius.circular(6),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (selectedIndex == 0
+                                ? KurabeColors.textSecondary
+                                : KurabeColors.accent)
+                            .withAlpha(50),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
                 ),
-                if (isSelected)
-                  Container(
-                    width: 22,
-                    height: 22,
-                    decoration: const BoxDecoration(
-                      color: KurabeColors.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      size: 14,
-                      color: Colors.white,
-                    ),
-                  ),
-              ],
+              ),
+              // Labels
+              Row(
+                children: [
+                  _buildDiscountOption('なし', 0, selectedIndex),
+                  _buildDiscountOption('%', 1, selectedIndex),
+                  _buildDiscountOption('¥', 2, selectedIndex),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDiscountOption(String label, int index, int selectedIndex) {
+    final isSelected = index == selectedIndex;
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          setState(() {
+            _selectedDiscountType = switch (index) {
+              1 => _DiscountType.percentage,
+              2 => _DiscountType.fixedAmount,
+              _ => _DiscountType.none,
+            };
+            if (_selectedDiscountType == _DiscountType.none) {
+              _discountValueController.clear();
+            }
+          });
+          _calculateFinalPrice();
+        },
+        child: Container(
+          color: Colors.transparent,
+          child: Center(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? Colors.white : KurabeColors.textSecondary,
+              ),
+              child: Text(label),
             ),
           ),
-        );
-      }).toList(),
+        ),
+      ),
     );
-
-    if (result != null && result != _taxRate) {
-      setState(() => _taxRate = result);
-      _calculateFinalPrice();
-    }
   }
 
   final GlobalKey _priceTypeDropdownKey = GlobalKey();
@@ -950,18 +1157,29 @@ class _AddEditScreenState extends State<AddEditScreen> {
     );
   }
 
-  Future<void> _showPriceTypePopup(List<({String value, String label, String subtitle, IconData icon, Color iconColor})> options) async {
-    final RenderBox renderBox = _priceTypeDropdownKey.currentContext!.findRenderObject() as RenderBox;
+  Future<void> _showPriceTypePopup(
+      List<
+              ({
+                String value,
+                String label,
+                String subtitle,
+                IconData icon,
+                Color iconColor
+              })>
+          options) async {
+    final RenderBox renderBox =
+        _priceTypeDropdownKey.currentContext!.findRenderObject() as RenderBox;
     final Offset offset = renderBox.localToGlobal(Offset.zero);
     final Size size = renderBox.size;
 
+    final screenWidth = MediaQuery.of(context).size.width;
     final result = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
-        offset.dx,
+        screenWidth - 200, // Right-align with fixed width
         offset.dy + size.height + 4,
-        offset.dx + size.width,
-        offset.dy + size.height + 250,
+        16, // Right margin
+        0,
       ),
       elevation: 8,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -974,7 +1192,9 @@ class _AddEditScreenState extends State<AddEditScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: isSelected ? KurabeColors.primary.withAlpha(20) : Colors.transparent,
+              color: isSelected
+                  ? KurabeColors.primary.withAlpha(20)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -1002,8 +1222,11 @@ class _AddEditScreenState extends State<AddEditScreen> {
                         option.label,
                         style: TextStyle(
                           fontSize: 15,
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                          color: isSelected ? KurabeColors.primary : KurabeColors.textPrimary,
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w600,
+                          color: isSelected
+                              ? KurabeColors.primary
+                              : KurabeColors.textPrimary,
                         ),
                       ),
                       Text(
@@ -1044,7 +1267,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
 
   Widget _buildInsightCard() {
     if (_insightState == _InsightState.idle) return const SizedBox.shrink();
-    
+
     IconData icon;
     Color iconColor;
     Color bgColor;
@@ -1068,8 +1291,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
       bgColor = Colors.amber.shade100;
       title = '周辺最安値！';
       if (_insightPrice != null && _insightShop != null) {
-        final distance = _insightDistanceMeters != null 
-            ? _formatDistance(_insightDistanceMeters!) 
+        final distance = _insightDistanceMeters != null
+            ? _formatDistance(_insightDistanceMeters!)
             : '';
         subtitle = '次点: $_insightShop ¥${_insightPrice!.round()} $distance';
       }
@@ -1078,10 +1301,11 @@ class _AddEditScreenState extends State<AddEditScreen> {
       icon = Icons.local_offer;
       iconColor = KurabeColors.success;
       bgColor = KurabeColors.success.withAlpha(20);
-      final priceText = _insightPrice != null ? '¥${_insightPrice!.round()}' : '';
+      final priceText =
+          _insightPrice != null ? '¥${_insightPrice!.round()}' : '';
       final shopText = _insightShop ?? '';
-      final distance = _insightDistanceMeters != null 
-          ? _formatDistance(_insightDistanceMeters!) 
+      final distance = _insightDistanceMeters != null
+          ? _formatDistance(_insightDistanceMeters!)
           : '';
       title = 'より安い店舗あり';
       subtitle = '$shopText $priceText $distance'.trim();
@@ -1183,6 +1407,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
       _shopController.text = sorted.first.name;
       _selectedShopLat = sorted.first.latitude;
       _selectedShopLng = sorted.first.longitude;
+      _shopPredictions = [];
       _isFetchingShops = false;
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1277,7 +1502,9 @@ class _AddEditScreenState extends State<AddEditScreen> {
     final discountValue = _parseCurrency(_discountValueController.text) ?? 0;
     final quantity = _parseQuantity();
 
-    if (product.isEmpty || shop.isEmpty || originalPrice == null ||
+    if (product.isEmpty ||
+        shop.isEmpty ||
+        originalPrice == null ||
         finalTaxedTotal == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1298,8 +1525,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
 
       final categoryToSave =
           (_selectedCategory != null && _selectedCategory!.trim().isNotEmpty
-          ? _selectedCategory!
-          : 'その他');
+              ? _selectedCategory!
+              : 'その他');
 
       await _supabaseService.saveRecord({
         'product_name': normalizedProduct,
@@ -1466,47 +1693,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 const SizedBox(width: 8),
-                ToggleButtons(
-                  isSelected: [
-                    _selectedDiscountType == _DiscountType.none,
-                    _selectedDiscountType == _DiscountType.percentage,
-                    _selectedDiscountType == _DiscountType.fixedAmount,
-                  ],
-                  borderRadius: BorderRadius.circular(10),
-                  borderColor: KurabeColors.border,
-                  selectedBorderColor: KurabeColors.primary,
-                  selectedColor: Colors.white,
-                  color: KurabeColors.textSecondary,
-                  fillColor: KurabeColors.primary,
-                  constraints: const BoxConstraints(minHeight: 34, minWidth: 48),
-                  onPressed: (index) {
-                    setState(() {
-                      _selectedDiscountType = switch (index) {
-                        1 => _DiscountType.percentage,
-                        2 => _DiscountType.fixedAmount,
-                        _ => _DiscountType.none,
-                      };
-                      if (_selectedDiscountType == _DiscountType.none) {
-                        _discountValueController.clear();
-                      }
-                    });
-                    _calculateFinalPrice();
-                  },
-                  children: const [
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('なし', style: TextStyle(fontSize: 12)),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('%', style: TextStyle(fontSize: 12)),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('¥', style: TextStyle(fontSize: 12)),
-                    ),
-                  ],
-                ),
+                // Modern discount toggle
+                _buildDiscountTypeToggle(),
                 if (_selectedDiscountType != _DiscountType.none) ...[
                   const SizedBox(width: 8),
                   SizedBox(
@@ -1516,7 +1704,8 @@ class _AddEditScreenState extends State<AddEditScreen> {
                       decoration: const InputDecoration(
                         labelText: '値',
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       ),
                       keyboardType: TextInputType.number,
                       onChanged: (_) => _calculateFinalPrice(),
@@ -1536,7 +1725,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
                   child: TextField(
                     controller: _shopController,
                     focusNode: _shopFocusNode,
-                    onChanged: (_) => _clearSelectedShopCoordinates(),
+                    onChanged: _onShopChanged,
                     decoration: InputDecoration(
                       labelText: '店舗名',
                       suffixIcon: _isFetchingShops
@@ -1565,6 +1754,10 @@ class _AddEditScreenState extends State<AddEditScreen> {
                 ),
               ],
             ),
+            if (_shopPredictions.isNotEmpty || _isSearchingShopPredictions) ...[
+              const SizedBox(height: 8),
+              _buildShopPredictionList(),
+            ],
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -1577,6 +1770,230 @@ class _AddEditScreenState extends State<AddEditScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildShopPredictionList() {
+    final predictions = _shopPredictions.take(6).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: KurabeColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: KurabeColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(8),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  KurabeColors.primary.withAlpha(15),
+                  KurabeColors.primary.withAlpha(5),
+                ],
+              ),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: KurabeColors.primary.withAlpha(30),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.location_on_rounded,
+                    size: 16,
+                    color: KurabeColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  '候補店舗',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: KurabeColors.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                if (_isSearchingShopPredictions)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(KurabeColors.primary),
+                    ),
+                  )
+                else
+                  Text(
+                    '${predictions.length}件',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: KurabeColors.textTertiary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // Predictions list
+          if (predictions.isNotEmpty)
+            ...predictions.asMap().entries.map((entry) {
+              final index = entry.key;
+              final prediction = entry.value;
+              final isLast = index == predictions.length - 1;
+
+              // Build subtitle parts
+              final subtitleParts = <String>[];
+              if (prediction.secondaryText != null &&
+                  prediction.secondaryText!.isNotEmpty) {
+                subtitleParts.add(prediction.secondaryText!);
+              }
+
+              // Distance indicator
+              final distanceText = prediction.distanceMeters != null
+                  ? _formatDistance(prediction.distanceMeters!)
+                  : null;
+
+              // Distance color based on proximity
+              Color distanceColor = KurabeColors.textTertiary;
+              Color distanceBgColor = KurabeColors.divider;
+              if (prediction.distanceMeters != null) {
+                if (prediction.distanceMeters! < 300) {
+                  distanceColor = KurabeColors.success;
+                  distanceBgColor = KurabeColors.success.withAlpha(20);
+                } else if (prediction.distanceMeters! < 1000) {
+                  distanceColor = KurabeColors.primary;
+                  distanceBgColor = KurabeColors.primary.withAlpha(20);
+                }
+              }
+
+              return Column(
+                children: [
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _onShopPredictionTapped(prediction),
+                      borderRadius: isLast
+                          ? const BorderRadius.vertical(
+                              bottom: Radius.circular(16))
+                          : BorderRadius.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            // Store icon badge
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: KurabeColors.primary.withAlpha(15),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                PhosphorIcons.storefront(
+                                    PhosphorIconsStyle.fill),
+                                size: 20,
+                                color: KurabeColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+
+                            // Text content
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    prediction.primaryText,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: KurabeColors.textPrimary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (subtitleParts.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 3),
+                                      child: Text(
+                                        subtitleParts.join(' • '),
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: KurabeColors.textTertiary,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+
+                            // Distance badge
+                            if (distanceText != null) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: distanceBgColor,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  distanceText,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: distanceColor,
+                                  ),
+                                ),
+                              ),
+                            ],
+
+                            // Arrow
+                            const SizedBox(width: 4),
+                            Icon(
+                              PhosphorIcons.caretRight(PhosphorIconsStyle.bold),
+                              size: 14,
+                              color: KurabeColors.textTertiary,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (!isLast)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 68),
+                      child: Container(
+                        height: 1,
+                        color: KurabeColors.divider,
+                      ),
+                    ),
+                ],
+              );
+            }),
+        ],
       ),
     );
   }

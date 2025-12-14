@@ -359,10 +359,8 @@ class _CatalogTabState extends State<CatalogTab> {
           (context, index) {
             final record = _searchResults[index];
             final unitPrice = _computeUnitPrice(record);
-            final name = (record['product_name'] as String?)
-                    ?.trim()
-                    .toLowerCase() ??
-                '';
+            final name =
+                (record['product_name'] as String?)?.trim().toLowerCase() ?? '';
             final minForName = minUnitPriceByName[name];
             final isCheapest = unitPrice != null &&
                 minForName != null &&

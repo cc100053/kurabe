@@ -52,8 +52,10 @@ class _CameraOverlayGuidePainter extends CustomPainter {
     );
 
     final splitY = guideRect.top + guideRect.height * 0.6;
-    final productRect = Rect.fromLTRB(guideRect.left, guideRect.top, guideRect.right, splitY);
-    final priceRect = Rect.fromLTRB(guideRect.left, splitY, guideRect.right, guideRect.bottom);
+    final productRect =
+        Rect.fromLTRB(guideRect.left, guideRect.top, guideRect.right, splitY);
+    final priceRect = Rect.fromLTRB(
+        guideRect.left, splitY, guideRect.right, guideRect.bottom);
 
     final borderRadius = const Radius.circular(16);
     final topPaint = Paint()

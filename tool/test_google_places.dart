@@ -17,11 +17,19 @@ Future<void> main(List<String> args) async {
 
   final uri = Uri.parse('https://places.googleapis.com/v1/places:searchNearby');
   final body = <String, dynamic>{
-    'includedTypes': ['supermarket', 'drugstore', 'convenience_store', 'shopping_mall'],
+    'includedTypes': [
+      'supermarket',
+      'drugstore',
+      'convenience_store',
+      'shopping_mall'
+    ],
     'maxResultCount': 5,
     'locationRestriction': {
       'circle': {
-        'center': {'latitude': double.parse(latitude), 'longitude': double.parse(longitude)},
+        'center': {
+          'latitude': double.parse(latitude),
+          'longitude': double.parse(longitude)
+        },
         'radius': double.parse(radius),
       }
     },

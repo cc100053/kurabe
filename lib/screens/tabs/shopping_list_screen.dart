@@ -84,9 +84,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
   Future<void> _toggleItem(ShoppingListItem item) async {
     final updated = item.copyWith(isDone: !item.isDone);
     setState(() {
-      _items = _items
-          .map((i) => i.id == updated.id ? updated : i)
-          .toList();
+      _items = _items.map((i) => i.id == updated.id ? updated : i).toList();
     });
 
     try {
@@ -94,9 +92,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
     } catch (e) {
       // Revert on failure
       setState(() {
-        _items = _items
-            .map((i) => i.id == item.id ? item : i)
-            .toList();
+        _items = _items.map((i) => i.id == item.id ? item : i).toList();
       });
       _showSnack('更新に失敗しました');
     }
@@ -436,8 +432,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
                     Row(
                       children: [
                         Icon(
-                          PhosphorIcons.calendarBlank(
-                              PhosphorIconsStyle.fill),
+                          PhosphorIcons.calendarBlank(PhosphorIconsStyle.fill),
                           size: 14,
                           color: KurabeColors.textTertiary,
                         ),

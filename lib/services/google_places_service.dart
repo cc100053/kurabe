@@ -28,9 +28,121 @@ const Set<String> _excludedTypes = {
 
 class GooglePlacesService {
   GooglePlacesService({http.Client? client})
-    : _client = client ?? http.Client();
+      : _client = client ?? http.Client();
 
   final http.Client _client;
+
+  Future<List<PlaceAutocompletePrediction>> autocomplete({
+    required String apiKey,
+    required String input,
+    double? latitude,
+    double? longitude,
+    double radiusMeters = 5000,
+    String languageCode = 'ja',
+  }) async {
+    if (input.trim().isEmpty) return const <PlaceAutocompletePrediction>[];
+
+    final uri = Uri.parse(
+      'https://places.googleapis.com/v1/places:autocomplete',
+    );
+    final body = <String, dynamic>{
+      'input': input,
+      'languageCode': languageCode,
+      'includedPrimaryTypes': ['establishment'],
+      if (latitude != null && longitude != null)
+        'locationBias': {
+          'circle': {
+            'center': {'latitude': latitude, 'longitude': longitude},
+            'radius': radiusMeters,
+          },
+        },
+    };
+    final response = await _client
+        .post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': apiKey,
+            'X-Goog-FieldMask':
+                // Use snake_case mask to match the API docs.
+                'suggestions.place_prediction.place_id,'
+                    'suggestions.place_prediction.distance_meters,'
+                    'suggestions.place_prediction.structured_format,'
+                    'suggestions.place_prediction.text',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Google Places Autocomplete error ${response.statusCode}: ${response.body}',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('想定外のGoogle Places Autocompleteレスポンス');
+    }
+    final suggestionsJson = decoded['suggestions'];
+    if (suggestionsJson is! List) {
+      return const <PlaceAutocompletePrediction>[];
+    }
+
+    final results = <PlaceAutocompletePrediction>[];
+    for (final item in suggestionsJson) {
+      if (item is Map<String, dynamic>) {
+        final parsed = PlaceAutocompletePrediction.fromJson(
+          item['placePrediction'] as Map<String, dynamic>? ?? item,
+        );
+        if (parsed != null) {
+          results.add(parsed);
+        }
+      }
+    }
+    return results;
+  }
+
+  Future<GooglePlace?> fetchPlaceDetails({
+    required String apiKey,
+    required String placeId,
+    String languageCode = 'ja',
+  }) async {
+    final uri = Uri.parse('https://places.googleapis.com/v1/places/$placeId');
+    final response = await _client.get(
+      uri,
+      headers: {
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'displayName,location',
+        'Accept-Language': languageCode,
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Google Place Details error ${response.statusCode}: ${response.body}',
+      );
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) return null;
+    final location = decoded['location'];
+    final lat =
+        location is Map<String, dynamic> ? location['latitude'] as num? : null;
+    final lng =
+        location is Map<String, dynamic> ? location['longitude'] as num? : null;
+    final displayName = decoded['displayName'];
+    final name = displayName is Map<String, dynamic>
+        ? displayName['text'] as String?
+        : decoded['name'] as String?;
+    if (lat == null || lng == null || name == null) return null;
+    return GooglePlace(
+      name: name.trim(),
+      latitude: lat.toDouble(),
+      longitude: lng.toDouble(),
+      distanceMeters: null,
+      types: null,
+    );
+  }
 
   Future<List<GooglePlace>> searchNearby({
     required String apiKey,
@@ -137,16 +249,13 @@ class GooglePlace {
         ? displayName['text'] as String?
         : null;
     final location = json['location'];
-    final lat = location is Map<String, dynamic>
-        ? location['latitude'] as num?
-        : null;
-    final lng = location is Map<String, dynamic>
-        ? location['longitude'] as num?
-        : null;
+    final lat =
+        location is Map<String, dynamic> ? location['latitude'] as num? : null;
+    final lng =
+        location is Map<String, dynamic> ? location['longitude'] as num? : null;
     final typesJson = json['types'];
-    final types = typesJson is List
-        ? typesJson.whereType<String>().toList()
-        : null;
+    final types =
+        typesJson is List ? typesJson.whereType<String>().toList() : null;
 
     if (name == null || name.trim().isEmpty || lat == null || lng == null) {
       return null;
@@ -230,8 +339,7 @@ double _haversineMeters(double lat1, double lon1, double lat2, double lon2) {
   const earthRadius = 6371000; // meters
   final dLat = _toRadians(lat2 - lat1);
   final dLon = _toRadians(lon2 - lon1);
-  final a =
-      math.sin(dLat / 2) * math.sin(dLat / 2) +
+  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
       math.cos(_toRadians(lat1)) *
           math.cos(_toRadians(lat2)) *
           math.sin(dLon / 2) *
@@ -241,3 +349,55 @@ double _haversineMeters(double lat1, double lon1, double lat2, double lon2) {
 }
 
 double _toRadians(double deg) => deg * (math.pi / 180);
+
+class PlaceAutocompletePrediction {
+  PlaceAutocompletePrediction({
+    required this.placeId,
+    required this.primaryText,
+    this.secondaryText,
+    this.distanceMeters,
+  });
+
+  final String placeId;
+  final String primaryText;
+  final String? secondaryText;
+  final double? distanceMeters;
+
+  static PlaceAutocompletePrediction? fromJson(Map<String, dynamic> json) {
+    final placeId = json['placeId'] as String? ?? json['place_id'] as String?;
+    if (placeId == null || placeId.isEmpty) return null;
+
+    String? primary;
+    String? secondary;
+
+    String? _extractText(dynamic value) {
+      if (value is String) return value;
+      if (value is Map<String, dynamic>) {
+        final text = value['text'];
+        if (text is String) return text;
+      }
+      return null;
+    }
+
+    final structured = json['structuredFormat'] ?? json['structured_format'];
+    if (structured is Map<String, dynamic>) {
+      primary = _extractText(structured['mainText']) ??
+          _extractText(structured['main_text']);
+      secondary = _extractText(structured['secondaryText']) ??
+          _extractText(structured['secondary_text']);
+    }
+    final text = json['text'];
+    final fallback = _extractText(text) ?? json['description'] as String?;
+    primary ??= fallback;
+    if (primary == null || primary.trim().isEmpty) return null;
+
+    final dist =
+        json['distanceMeters'] as num? ?? json['distance_meters'] as num?;
+    return PlaceAutocompletePrediction(
+      placeId: placeId,
+      primaryText: primary.trim(),
+      secondaryText: secondary?.trim(),
+      distanceMeters: dist?.toDouble(),
+    );
+  }
+}

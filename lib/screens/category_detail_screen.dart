@@ -197,7 +197,8 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: KurabeColors.primary.withAlpha(26),
                   borderRadius: BorderRadius.circular(12),
@@ -384,10 +385,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
             itemBuilder: (context, index) {
               final record = records[index];
               final unitPrice = _computeUnitPrice(record);
-              final productName = (record['product_name'] as String?)
-                      ?.trim()
-                      .toLowerCase() ??
-                  '';
+              final productName =
+                  (record['product_name'] as String?)?.trim().toLowerCase() ??
+                      '';
               final minForName = minUnitPriceByName[productName];
               final isCheapest = unitPrice != null &&
                   minForName != null &&

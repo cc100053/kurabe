@@ -7,11 +7,11 @@ import 'package:path/path.dart' as p;
 
 class GeminiService {
   GeminiService({String? apiKey})
-    : _apiKey = apiKey ?? dotenv.env['GEMINI_API_KEY'] ?? '',
-      _model = GenerativeModel(
-        model: 'gemini-flash-latest',
-        apiKey: apiKey ?? dotenv.env['GEMINI_API_KEY'] ?? '',
-      );
+      : _apiKey = apiKey ?? dotenv.env['GEMINI_API_KEY'] ?? '',
+        _model = GenerativeModel(
+          model: 'gemini-flash-latest',
+          apiKey: apiKey ?? dotenv.env['GEMINI_API_KEY'] ?? '',
+        );
 
   final String _apiKey;
   final GenerativeModel _model;

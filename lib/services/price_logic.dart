@@ -23,15 +23,18 @@ class PriceLogic {
   /// Picks a tax rate based on the category. Food defaults to 8%, otherwise 10%.
   double determineTaxRate(String? categoryTag) {
     final normalized = categoryTag?.toLowerCase() ?? '';
-    if (normalized.contains('food') || normalized.contains('drink') ||
-        normalized.contains('meat') || normalized.contains('vegetable')) {
+    if (normalized.contains('food') ||
+        normalized.contains('drink') ||
+        normalized.contains('meat') ||
+        normalized.contains('vegetable')) {
       return 0.08;
     }
     return 0.10;
   }
 
   /// Calculates final 税込 price. If the detected price is 税抜, tax is applied.
-  double calculateFinalPrice(double inputPrice, {required bool isTaxIncluded, required double taxRate}) {
+  double calculateFinalPrice(double inputPrice,
+      {required bool isTaxIncluded, required double taxRate}) {
     if (isTaxIncluded) {
       return inputPrice;
     }
@@ -66,7 +69,10 @@ class PriceLogic {
           .toList();
       final candidates = withYen.isNotEmpty
           ? withYen
-          : matches.map((m) => _parseAmount(m.group(1))).whereType<double>().toList();
+          : matches
+              .map((m) => _parseAmount(m.group(1)))
+              .whereType<double>()
+              .toList();
       if (candidates.isNotEmpty) {
         detectedPrice = candidates.reduce(max);
         detectedIsIncluded = _includedKeywords.contains(keyword);
@@ -86,7 +92,10 @@ class PriceLogic {
       if (withYen.isNotEmpty) {
         detectedPrice = withYen.reduce(max);
       } else {
-        final prices = yenMatches.map((m) => _parseAmount(m.group(1))).whereType<double>().toList();
+        final prices = yenMatches
+            .map((m) => _parseAmount(m.group(1)))
+            .whereType<double>()
+            .toList();
         if (prices.isNotEmpty) {
           detectedPrice = prices.reduce(max);
         }

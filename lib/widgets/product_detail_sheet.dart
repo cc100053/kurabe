@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 
-
 import '../services/location_service.dart';
 import '../services/supabase_service.dart';
 import '../screens/tabs/profile_tab.dart';
@@ -77,9 +76,8 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
       if (position == null) {
         try {
           position = await Geolocator.getCurrentPosition(
-            desiredAccuracy: highAccuracy
-                ? LocationAccuracy.high
-                : LocationAccuracy.low,
+            desiredAccuracy:
+                highAccuracy ? LocationAccuracy.high : LocationAccuracy.low,
             timeLimit: highAccuracy
                 ? const Duration(seconds: 8)
                 : const Duration(seconds: 4),
@@ -234,12 +232,13 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
                     fit: BoxFit.cover,
                     placeholder: (_, __) =>
                         Container(color: Colors.grey.shade200),
-                    errorWidget: (_, __, ___) =>
-                        const Icon(Icons.broken_image, size: 32, color: Colors.grey),
+                    errorWidget: (_, __, ___) => const Icon(Icons.broken_image,
+                        size: 32, color: Colors.grey),
                   )
                 : Container(
                     color: Colors.grey.shade200,
-                    child: const Icon(Icons.image, size: 32, color: Colors.grey),
+                    child:
+                        const Icon(Icons.image, size: 32, color: Colors.grey),
                   ),
           ),
         ),
@@ -358,9 +357,8 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
             ),
             const SizedBox(height: 10),
             ElevatedButton.icon(
-              onPressed: _isLoading
-                  ? null
-                  : () => _fetchInsight(highAccuracy: true),
+              onPressed:
+                  _isLoading ? null : () => _fetchInsight(highAccuracy: true),
               icon: _isLoading
                   ? const SizedBox(
                       width: 16,
@@ -409,10 +407,8 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
     }
 
     final communityPrice = (community['price'] as num?)?.toDouble();
-    final communityQuantity =
-        (community['quantity'] as num?)?.toDouble() ?? 1;
-    final communityUnitPrice =
-        (community['unit_price'] as num?)?.toDouble() ??
+    final communityQuantity = (community['quantity'] as num?)?.toDouble() ?? 1;
+    final communityUnitPrice = (community['unit_price'] as num?)?.toDouble() ??
         _computeUnitPrice(communityPrice, communityQuantity);
 
     final userQuantity = (widget.record['quantity'] as num?)?.toDouble() ?? 1;
@@ -421,16 +417,15 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
     final userId = widget.record['id'];
 
     final communityShop = community['shop_name'] as String?;
-    final communityDistance = (community['distance_meters'] as num?)
-        ?.toDouble();
+    final communityDistance =
+        (community['distance_meters'] as num?)?.toDouble();
     final communityDate = _parseDate(community['created_at']);
 
     // Compare Unit Prices for accurate "Best Price" logic
     final sameRecord = communityId != null &&
         userId != null &&
         communityId.toString() == userId.toString();
-    final foundCheaper =
-        communityUnitPrice != null &&
+    final foundCheaper = communityUnitPrice != null &&
         userUnitPrice != null &&
         !sameRecord &&
         communityUnitPrice + 1e-6 < userUnitPrice;
@@ -439,9 +434,8 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
       final subtitleParts = <String>[];
       final distanceText = _formatDistance(communityDistance);
       if (distanceText.isNotEmpty) subtitleParts.add(distanceText);
-      final relative = communityDate != null
-          ? _formatTimeAgo(communityDate)
-          : null;
+      final relative =
+          communityDate != null ? _formatTimeAgo(communityDate) : null;
       if (relative != null) subtitleParts.add('$relativeに報告');
 
       final unit = community['unit'] as String? ?? '';

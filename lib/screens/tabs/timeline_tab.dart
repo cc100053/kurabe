@@ -60,151 +60,153 @@ class _TimelineTabState extends State<TimelineTab> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-          // Premium Header
-          SliverAppBar(
-            expandedHeight: 140,
-            floating: true,
-            snap: true,
-            backgroundColor: KurabeColors.background,
-            surfaceTintColor: Colors.transparent,
-            flexibleSpace: FlexibleSpaceBar(
-              background: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Greeting row with emoji
-                      Row(
-                        children: [
-                          Text(
-                            _getGreetingEmoji(),
-                            style: const TextStyle(fontSize: 24),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _getGreeting(),
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: KurabeColors.textSecondary,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      // Date with badge styling
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: KurabeColors.surfaceElevated,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withAlpha(8),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          DateFormat('yyyy年M月d日（E）', 'ja_JP').format(DateTime.now()),
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: KurabeColors.textPrimary,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          
-          // Content
-          if (stream == null)
-            SliverFillRemaining(
-              child: _buildEmptyState(
-                icon: PhosphorIcons.signIn(PhosphorIconsStyle.duotone),
-                title: 'ログインしてください',
-                subtitle: 'タイムラインを見るにはログインが必要です',
-              ),
-            )
-          else
-            StreamBuilder<List<Map<String, dynamic>>>(
-              stream: stream,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return SliverFillRemaining(
-                    child: _buildEmptyState(
-                      icon: PhosphorIcons.warningCircle(PhosphorIconsStyle.duotone),
-                      title: 'エラーが発生しました',
-                      subtitle: '${snapshot.error}',
-                    ),
-                  );
-                }
-                if (!snapshot.hasData) {
-                  return const SliverFillRemaining(
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: KurabeColors.primary,
-                      ),
-                    ),
-                  );
-                }
-                final records = snapshot.data!;
-                if (records.isEmpty) {
-                  return SliverFillRemaining(
-                    child: _buildEmptyState(
-                      icon: PhosphorIcons.scan(PhosphorIconsStyle.duotone),
-                      title: 'まだ記録がありません',
-                      subtitle: 'スキャンボタンで\n価格をスキャンしてみましょう',
-                      showAction: true,
-                    ),
-                  );
-                }
-
-                final grouped = _groupRecordsByDate(records);
-
-                return SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final group = grouped[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+            // Premium Header
+            SliverAppBar(
+              expandedHeight: 140,
+              floating: true,
+              snap: true,
+              backgroundColor: KurabeColors.background,
+              surfaceTintColor: Colors.transparent,
+              flexibleSpace: FlexibleSpaceBar(
+                background: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Greeting row with emoji
+                        Row(
                           children: [
-                            _buildDateHeader(context, group.dateLabel),
-                            ...group.records.map(
-                              (record) => Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 4,
-                                ),
-                                child: CommunityProductTile(record: record),
+                            Text(
+                              _getGreetingEmoji(),
+                              style: const TextStyle(fontSize: 24),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _getGreeting(),
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: KurabeColors.textSecondary,
+                                letterSpacing: -0.2,
                               ),
                             ),
                           ],
                         ),
-                      );
-                    },
-                    childCount: grouped.length,
+                        const SizedBox(height: 8),
+                        // Date with badge styling
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: KurabeColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withAlpha(8),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            DateFormat('yyyy年M月d日（E）', 'ja_JP')
+                                .format(DateTime.now()),
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: KurabeColors.textPrimary,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
-          
-          // Bottom padding for FAB
-          const SliverToBoxAdapter(child: SizedBox(height: 120)),
+
+            // Content
+            if (stream == null)
+              SliverFillRemaining(
+                child: _buildEmptyState(
+                  icon: PhosphorIcons.signIn(PhosphorIconsStyle.duotone),
+                  title: 'ログインしてください',
+                  subtitle: 'タイムラインを見るにはログインが必要です',
+                ),
+              )
+            else
+              StreamBuilder<List<Map<String, dynamic>>>(
+                stream: stream,
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return SliverFillRemaining(
+                      child: _buildEmptyState(
+                        icon: PhosphorIcons.warningCircle(
+                            PhosphorIconsStyle.duotone),
+                        title: 'エラーが発生しました',
+                        subtitle: '${snapshot.error}',
+                      ),
+                    );
+                  }
+                  if (!snapshot.hasData) {
+                    return const SliverFillRemaining(
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: KurabeColors.primary,
+                        ),
+                      ),
+                    );
+                  }
+                  final records = snapshot.data!;
+                  if (records.isEmpty) {
+                    return SliverFillRemaining(
+                      child: _buildEmptyState(
+                        icon: PhosphorIcons.scan(PhosphorIconsStyle.duotone),
+                        title: 'まだ記録がありません',
+                        subtitle: 'スキャンボタンで\n価格をスキャンしてみましょう',
+                        showAction: true,
+                      ),
+                    );
+                  }
+
+                  final grouped = _groupRecordsByDate(records);
+
+                  return SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final group = grouped[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildDateHeader(context, group.dateLabel),
+                              ...group.records.map(
+                                (record) => Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 4,
+                                  ),
+                                  child: CommunityProductTile(record: record),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      childCount: grouped.length,
+                    ),
+                  );
+                },
+              ),
+
+            // Bottom padding for FAB
+            const SliverToBoxAdapter(child: SizedBox(height: 120)),
           ],
         ),
       ),
@@ -318,7 +320,8 @@ class _TimelineTabState extends State<TimelineTab> {
             if (showAction) ...[
               const SizedBox(height: 32),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 decoration: BoxDecoration(
                   color: KurabeColors.primary.withAlpha(13),
                   borderRadius: BorderRadius.circular(30),

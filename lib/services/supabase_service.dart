@@ -5,7 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
   SupabaseService({SupabaseClient? client})
-    : _client = client ?? Supabase.instance.client;
+      : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
   static bool _userIdColumnMissing = false;
@@ -17,9 +17,7 @@ class SupabaseService {
     final ext = p.extension(imageFile.path);
     final objectPath =
         'price_tags_${DateTime.now().millisecondsSinceEpoch}$ext';
-    await _client.storage
-        .from('price_tags')
-        .upload(
+    await _client.storage.from('price_tags').upload(
           objectPath,
           imageFile,
           fileOptions: const FileOptions(upsert: true),
@@ -190,17 +188,17 @@ class SupabaseService {
             'user_lng': lng,
             'limit_results': limit,
           },
-      );
-      if (result is List && result.isNotEmpty) {
-        final items = result
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList();
-        return _groupCommunityResults(items);
+        );
+        if (result is List && result.isNotEmpty) {
+          final items = result
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          return _groupCommunityResults(items);
+        }
+      } catch (_) {
+        // Fall back below.
       }
-    } catch (_) {
-      // Fall back below.
-    }
     }
 
     // Fallback: simple query without location.
@@ -305,12 +303,10 @@ class SupabaseService {
     for (final record in records) {
       final name =
           (record['product_name'] as String?)?.trim().toLowerCase() ?? '';
-      final shop =
-          (record['shop_name'] as String?)?.trim().toLowerCase() ?? '';
+      final shop = (record['shop_name'] as String?)?.trim().toLowerCase() ?? '';
       final price = (record['price'] as num?)?.toDouble();
       final quantity = (record['quantity'] as num?)?.toDouble() ?? 1;
-      final unitPrice =
-          (record['unit_price'] as num?)?.toDouble() ??
+      final unitPrice = (record['unit_price'] as num?)?.toDouble() ??
           (price != null ? price / (quantity <= 0 ? 1 : quantity) : null);
       final key =
           '$name|$shop|${price?.toStringAsFixed(4) ?? 'na'}|${unitPrice?.toStringAsFixed(6) ?? 'na'}';

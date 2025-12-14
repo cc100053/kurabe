@@ -42,30 +42,31 @@ Future<void> _loadEnv() async {
 /// Premium Design System Colors
 class KurabeColors {
   // Primary palette
-  static const Color primary = Color(0xFF1A8D7A);        // Deep teal
-  static const Color primaryLight = Color(0xFF4DB6A6);   // Light teal
-  static const Color primaryDark = Color(0xFF0D5C50);    // Dark teal
-  
+  static const Color primary = Color(0xFF1A8D7A); // Deep teal
+  static const Color primaryLight = Color(0xFF4DB6A6); // Light teal
+  static const Color primaryDark = Color(0xFF0D5C50); // Dark teal
+
   // Surface colors (warm cream tones)
-  static const Color background = Color(0xFFFAF9F7);     // Warm off-white
-  static const Color surface = Color(0xFFFDFCFB);        // Cream white
-  static const Color surfaceElevated = Color(0xFFFFFFFF); // Pure white for cards
-  
+  static const Color background = Color(0xFFFAF9F7); // Warm off-white
+  static const Color surface = Color(0xFFFDFCFB); // Cream white
+  static const Color surfaceElevated =
+      Color(0xFFFFFFFF); // Pure white for cards
+
   // Text colors
-  static const Color textPrimary = Color(0xFF242424);    // Charcoal
-  static const Color textSecondary = Color(0xFF6B7280);  // Warm gray
-  static const Color textTertiary = Color(0xFF9CA3AF);   // Light gray
-  
+  static const Color textPrimary = Color(0xFF242424); // Charcoal
+  static const Color textSecondary = Color(0xFF6B7280); // Warm gray
+  static const Color textTertiary = Color(0xFF9CA3AF); // Light gray
+
   // Accent colors
-  static const Color accent = Color(0xFFFF8C42);         // Warm orange
-  static const Color success = Color(0xFF34C759);        // Green
-  static const Color error = Color(0xFFE53935);          // Red
-  static const Color warning = Color(0xFFFFB020);        // Amber
-  
+  static const Color accent = Color(0xFFFF8C42); // Warm orange
+  static const Color success = Color(0xFF34C759); // Green
+  static const Color error = Color(0xFFE53935); // Red
+  static const Color warning = Color(0xFFFFB020); // Amber
+
   // UI colors
-  static const Color border = Color(0xFFE5E7EB);         // Light border
-  static const Color divider = Color(0xFFF3F4F6);        // Subtle divider
-  static const Color shadow = Color(0x0A000000);         // Soft black shadow
+  static const Color border = Color(0xFFE5E7EB); // Light border
+  static const Color divider = Color(0xFFF3F4F6); // Subtle divider
+  static const Color shadow = Color(0x0A000000); // Soft black shadow
 }
 
 class KurabeApp extends StatefulWidget {
@@ -84,7 +85,7 @@ class _KurabeAppState extends State<KurabeApp> {
     final baseTextTheme = GoogleFonts.notoSansJpTextTheme(
       Theme.of(context).textTheme,
     );
-    
+
     final textTheme = baseTextTheme.copyWith(
       // Display styles - for hero text
       displayLarge: baseTextTheme.displayLarge?.copyWith(
@@ -176,7 +177,7 @@ class _KurabeAppState extends State<KurabeApp> {
         theme: ThemeData(
           useMaterial3: true,
           brightness: Brightness.light,
-          
+
           // Colors
           scaffoldBackgroundColor: KurabeColors.background,
           colorScheme: ColorScheme.light(
@@ -197,10 +198,10 @@ class _KurabeAppState extends State<KurabeApp> {
             error: KurabeColors.error,
             onError: Colors.white,
           ),
-          
+
           // Typography
           textTheme: textTheme,
-          
+
           // AppBar theme
           appBarTheme: AppBarTheme(
             backgroundColor: KurabeColors.background,
@@ -218,7 +219,7 @@ class _KurabeAppState extends State<KurabeApp> {
               size: 24,
             ),
           ),
-          
+
           // Card theme - elevated with soft shadows
           cardTheme: CardThemeData(
             color: KurabeColors.surfaceElevated,
@@ -229,23 +230,26 @@ class _KurabeAppState extends State<KurabeApp> {
             ),
             margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 0),
           ),
-          
+
           // Input decoration - neumorphic style
           inputDecorationTheme: InputDecorationTheme(
             filled: true,
             fillColor: KurabeColors.surfaceElevated,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide.none,
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: KurabeColors.border, width: 1),
+              borderSide:
+                  const BorderSide(color: KurabeColors.border, width: 1),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: KurabeColors.primary, width: 2),
+              borderSide:
+                  const BorderSide(color: KurabeColors.primary, width: 2),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
@@ -255,7 +259,7 @@ class _KurabeAppState extends State<KurabeApp> {
               color: KurabeColors.textTertiary,
             ),
           ),
-          
+
           // Elevated button - gradient-ready with rounded corners
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
@@ -273,7 +277,7 @@ class _KurabeAppState extends State<KurabeApp> {
               ),
             ),
           ),
-          
+
           // Text button
           textButtonTheme: TextButtonThemeData(
             style: TextButton.styleFrom(
@@ -287,7 +291,7 @@ class _KurabeAppState extends State<KurabeApp> {
               ),
             ),
           ),
-          
+
           // Outlined button
           outlinedButtonTheme: OutlinedButtonThemeData(
             style: OutlinedButton.styleFrom(
@@ -303,7 +307,7 @@ class _KurabeAppState extends State<KurabeApp> {
               ),
             ),
           ),
-          
+
           // Floating action button
           floatingActionButtonTheme: const FloatingActionButtonThemeData(
             backgroundColor: KurabeColors.primary,
@@ -311,7 +315,7 @@ class _KurabeAppState extends State<KurabeApp> {
             elevation: 4,
             shape: CircleBorder(),
           ),
-          
+
           // Bottom navigation bar
           bottomNavigationBarTheme: const BottomNavigationBarThemeData(
             backgroundColor: KurabeColors.surfaceElevated,
@@ -320,7 +324,7 @@ class _KurabeAppState extends State<KurabeApp> {
             type: BottomNavigationBarType.fixed,
             elevation: 0,
           ),
-          
+
           // Chip theme
           chipTheme: ChipThemeData(
             backgroundColor: KurabeColors.divider,
@@ -331,7 +335,7 @@ class _KurabeAppState extends State<KurabeApp> {
             side: BorderSide.none,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
-          
+
           // Dialog theme
           dialogTheme: DialogThemeData(
             backgroundColor: KurabeColors.surfaceElevated,
@@ -342,7 +346,7 @@ class _KurabeAppState extends State<KurabeApp> {
             titleTextStyle: textTheme.titleLarge,
             contentTextStyle: textTheme.bodyMedium,
           ),
-          
+
           // Bottom sheet theme
           bottomSheetTheme: const BottomSheetThemeData(
             backgroundColor: KurabeColors.surfaceElevated,
@@ -354,41 +358,43 @@ class _KurabeAppState extends State<KurabeApp> {
             dragHandleColor: KurabeColors.border,
             dragHandleSize: Size(40, 4),
           ),
-          
+
           // Divider theme
           dividerTheme: const DividerThemeData(
             color: KurabeColors.divider,
             thickness: 1,
             space: 1,
           ),
-          
+
           // List tile theme
           listTileTheme: ListTileThemeData(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
             tileColor: Colors.transparent,
             selectedTileColor: KurabeColors.primary.withAlpha(26),
           ),
-          
+
           // Icon theme
           iconTheme: const IconThemeData(
             color: KurabeColors.textSecondary,
             size: 24,
           ),
-          
+
           // Progress indicator theme
           progressIndicatorTheme: const ProgressIndicatorThemeData(
             color: KurabeColors.primary,
             linearTrackColor: KurabeColors.divider,
             circularTrackColor: KurabeColors.divider,
           ),
-          
+
           // Snackbar theme
           snackBarTheme: SnackBarThemeData(
             backgroundColor: KurabeColors.textPrimary,
-            contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
+            contentTextStyle:
+                textTheme.bodyMedium?.copyWith(color: Colors.white),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -538,7 +544,8 @@ class _MissingEnvApp extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: const [
-                Icon(Icons.warning_amber_rounded, size: 48, color: KurabeColors.error),
+                Icon(Icons.warning_amber_rounded,
+                    size: 48, color: KurabeColors.error),
                 SizedBox(height: 16),
                 Text(
                   '環境変数が不足しています',
@@ -548,7 +555,10 @@ class _MissingEnvApp extends StatelessWidget {
                 SizedBox(height: 8),
                 Text(
                   'SUPABASE_URL と SUPABASE_ANON_KEY を設定してください (.env やビルド設定で注入)。',
-                  style: TextStyle(fontSize: 14, color: KurabeColors.textSecondary, height: 1.5),
+                  style: TextStyle(
+                      fontSize: 14,
+                      color: KurabeColors.textSecondary,
+                      height: 1.5),
                   textAlign: TextAlign.center,
                 ),
               ],

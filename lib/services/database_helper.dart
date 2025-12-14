@@ -97,7 +97,8 @@ class DatabaseHelper {
 
   Future<Shop?> getShopById(int id) async {
     final db = await database;
-    final result = await db.query('shops', where: 'id = ?', whereArgs: [id], limit: 1);
+    final result =
+        await db.query('shops', where: 'id = ?', whereArgs: [id], limit: 1);
     if (result.isEmpty) return null;
     return Shop.fromMap(result.first);
   }
@@ -109,7 +110,8 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> fetchRecentRecords({String? query}) async {
     final db = await database;
-    final whereClause = query != null && query.isNotEmpty ? 'WHERE p.name LIKE ?' : '';
+    final whereClause =
+        query != null && query.isNotEmpty ? 'WHERE p.name LIKE ?' : '';
     final whereArgs = query != null && query.isNotEmpty ? ['%$query%'] : null;
 
     final result = await db.rawQuery('''

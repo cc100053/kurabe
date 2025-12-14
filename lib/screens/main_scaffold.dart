@@ -18,7 +18,8 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold>
     with SingleTickerProviderStateMixin {
-  final GlobalKey<ProfileTabState> _profileTabKey = GlobalKey<ProfileTabState>();
+  final GlobalKey<ProfileTabState> _profileTabKey =
+      GlobalKey<ProfileTabState>();
   int _currentIndex = 0;
   late final AnimationController _fabAnimController;
   late final Animation<double> _fabScaleAnim;
@@ -92,15 +93,18 @@ class _MainScaffoldState extends State<MainScaffold>
                     Expanded(
                       child: _buildNavItem(
                         icon: PhosphorIcons.house(PhosphorIconsStyle.regular),
-                        activeIcon: PhosphorIcons.house(PhosphorIconsStyle.fill),
+                        activeIcon:
+                            PhosphorIcons.house(PhosphorIconsStyle.fill),
                         label: 'ホーム',
                         index: 0,
                       ),
                     ),
                     Expanded(
                       child: _buildNavItem(
-                        icon: PhosphorIcons.squaresFour(PhosphorIconsStyle.regular),
-                        activeIcon: PhosphorIcons.squaresFour(PhosphorIconsStyle.fill),
+                        icon: PhosphorIcons.squaresFour(
+                            PhosphorIconsStyle.regular),
+                        activeIcon:
+                            PhosphorIcons.squaresFour(PhosphorIconsStyle.fill),
                         label: 'カタログ',
                         index: 1,
                       ),
@@ -115,7 +119,8 @@ class _MainScaffoldState extends State<MainScaffold>
                   children: [
                     Expanded(
                       child: _buildNavItem(
-                        icon: PhosphorIcons.checkSquare(PhosphorIconsStyle.regular),
+                        icon: PhosphorIcons.checkSquare(
+                            PhosphorIconsStyle.regular),
                         activeIcon:
                             PhosphorIcons.checkSquare(PhosphorIconsStyle.fill),
                         label: 'リスト',

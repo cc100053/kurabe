@@ -80,7 +80,10 @@ class AppState extends ChangeNotifier {
     final existingProduct = await _db.getProductByName(normalizedProduct);
     final productId = existingProduct?.id ??
         await _db.insertProduct(
-          Product(name: normalizedProduct, categoryTag: categoryTag, imagePath: imagePath),
+          Product(
+              name: normalizedProduct,
+              categoryTag: categoryTag,
+              imagePath: imagePath),
         );
 
     final existingShop = await _db.getShopByName(normalizedShop);
@@ -119,7 +122,8 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  PriceRecord? _findCheaperAlert(List<PriceRecord> previousHistory, double newPrice) {
+  PriceRecord? _findCheaperAlert(
+      List<PriceRecord> previousHistory, double newPrice) {
     if (previousHistory.isEmpty) return null;
     previousHistory.sort((a, b) => a.finalPrice.compareTo(b.finalPrice));
     final cheapest = previousHistory.first;

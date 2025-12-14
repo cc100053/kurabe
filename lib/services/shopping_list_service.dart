@@ -45,11 +45,15 @@ class ShoppingListService {
       throw StateError('no user');
     }
 
-    final data = await _client.from('shopping_list_items').insert({
-      'title': trimmed,
-      'is_done': false,
-      'user_id': userId,
-    }).select().maybeSingle();
+    final data = await _client
+        .from('shopping_list_items')
+        .insert({
+          'title': trimmed,
+          'is_done': false,
+          'user_id': userId,
+        })
+        .select()
+        .maybeSingle();
 
     if (data == null) throw StateError('insert failed');
     return ShoppingListItem.fromJson(
@@ -60,8 +64,7 @@ class ShoppingListService {
   Future<void> toggleDone(ShoppingListItem item) async {
     await _client
         .from('shopping_list_items')
-        .update({'is_done': !item.isDone})
-        .eq('id', item.id);
+        .update({'is_done': !item.isDone}).eq('id', item.id);
   }
 
   Future<void> deleteItem(int id) async {

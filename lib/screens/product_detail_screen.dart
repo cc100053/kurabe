@@ -5,7 +5,8 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 
 class ProductDetailScreen extends StatelessWidget {
-  const ProductDetailScreen({super.key, required this.productId, required this.productName});
+  const ProductDetailScreen(
+      {super.key, required this.productId, required this.productName});
 
   final int productId;
   final String productName;
@@ -25,7 +26,8 @@ class ProductDetailScreen extends StatelessWidget {
           if (history.isEmpty) {
             return const Center(child: Text('まだ履歴がありません'));
           }
-          final minPrice = history.map((e) => e.finalPrice).reduce((a, b) => a < b ? a : b);
+          final minPrice =
+              history.map((e) => e.finalPrice).reduce((a, b) => a < b ? a : b);
           return ListView.builder(
             itemCount: history.length,
             itemBuilder: (context, index) {
@@ -33,9 +35,12 @@ class ProductDetailScreen extends StatelessWidget {
               final isCheapest = record.finalPrice == minPrice;
               return ListTile(
                 title: Text('${formatter.format(record.finalPrice.round())} 円'),
-                subtitle: Text('${record.date.toLocal().toIso8601String().split('T').first} • 税率 ${(record.taxRate * 100).toStringAsFixed(0)}%'),
+                subtitle: Text(
+                    '${record.date.toLocal().toIso8601String().split('T').first} • 税率 ${(record.taxRate * 100).toStringAsFixed(0)}%'),
                 trailing: Text(record.isTaxIncluded ? '税込' : '税抜'),
-                tileColor: isCheapest ? Colors.green.withAlpha((255 * 0.1).round()) : null,
+                tileColor: isCheapest
+                    ? Colors.green.withAlpha((255 * 0.1).round())
+                    : null,
               );
             },
           );

@@ -38,8 +38,7 @@ class ShoppingCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap:
-            onTap ??
+        onTap: onTap ??
             () {
               showModalBottomSheet(
                 context: context,

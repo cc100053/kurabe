@@ -32,9 +32,10 @@ class ProfileTabState extends State<ProfileTab> {
   /// Converts auth exceptions to user-friendly Japanese messages
   String _friendlyErrorMessage(dynamic error) {
     final msg = error.toString().toLowerCase();
-    
+
     // Password errors
-    if (msg.contains('password') && (msg.contains('6') || msg.contains('least'))) {
+    if (msg.contains('password') &&
+        (msg.contains('6') || msg.contains('least'))) {
       return 'パスワードは6文字以上で入力してください。';
     }
     if (msg.contains('weak') && msg.contains('password')) {
@@ -43,43 +44,50 @@ class ProfileTabState extends State<ProfileTab> {
     if (msg.contains('invalid') && msg.contains('password')) {
       return 'パスワードが正しくありません。';
     }
-    
+
     // Email errors
     if (msg.contains('invalid') && msg.contains('email')) {
       return 'メールアドレスの形式が正しくありません。';
     }
-    if ((msg.contains('email') || msg.contains('user')) && 
-        msg.contains('already') && 
+    if ((msg.contains('email') || msg.contains('user')) &&
+        msg.contains('already') &&
         (msg.contains('registered') || msg.contains('exists'))) {
       return 'このメールアドレスは既に登録されています。';
     }
-    
+
     // Identity/account errors
-    if (msg.contains('identity') && (msg.contains('exists') || msg.contains('linked'))) {
+    if (msg.contains('identity') &&
+        (msg.contains('exists') || msg.contains('linked'))) {
       return 'このアカウントは既に別のユーザーに紐づいています。';
     }
-    
+
     // Network errors
-    if (msg.contains('network') || msg.contains('connection') || msg.contains('timeout') || msg.contains('socket')) {
+    if (msg.contains('network') ||
+        msg.contains('connection') ||
+        msg.contains('timeout') ||
+        msg.contains('socket')) {
       return 'ネットワーク接続に問題があります。接続を確認してください。';
     }
-    
+
     // Auth errors
-    if (msg.contains('invalid') && (msg.contains('credentials') || msg.contains('login'))) {
+    if (msg.contains('invalid') &&
+        (msg.contains('credentials') || msg.contains('login'))) {
       return 'メールアドレスまたはパスワードが正しくありません。';
     }
     if (msg.contains('not') && msg.contains('found')) {
       return 'アカウントが見つかりません。';
     }
-    if (msg.contains('email') && msg.contains('not') && msg.contains('confirmed')) {
+    if (msg.contains('email') &&
+        msg.contains('not') &&
+        msg.contains('confirmed')) {
       return 'メールアドレスが確認されていません。受信箱を確認してください。';
     }
-    
+
     // Rate limiting
     if (msg.contains('rate') && msg.contains('limit')) {
       return 'リクエストが多すぎます。しばらく待ってから再試行してください。';
     }
-    
+
     // Generic fallback - don't show technical details
     return '予期せぬエラーが発生しました。もう一度お試しください。';
   }
@@ -87,10 +95,10 @@ class ProfileTabState extends State<ProfileTab> {
   /// Shows a floating SnackBar with the given message
   void _showStatusSnackBar(String message, {bool isError = false}) {
     if (!mounted) return;
-    
+
     // Dismiss any existing snackbar
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -140,8 +148,7 @@ class ProfileTabState extends State<ProfileTab> {
   }
 
   Future<bool?> _showIdentityExistsDialog(OAuthProvider provider) {
-    final providerLabel =
-        provider == OAuthProvider.google ? 'Google' : 'Apple';
+    final providerLabel = provider == OAuthProvider.google ? 'Google' : 'Apple';
     return showDialog<bool>(
       context: context,
       builder: (context) {
@@ -226,7 +233,9 @@ class ProfileTabState extends State<ProfileTab> {
           _showStatusSnackBar('ブラウザを開きました。Googleアカウントでログインしてください。');
         } catch (loginError) {
           if (!mounted) return;
-          _showStatusSnackBar('ログインに失敗しました。${_friendlyErrorMessage(loginError)}', isError: true);
+          _showStatusSnackBar(
+              'ログインに失敗しました。${_friendlyErrorMessage(loginError)}',
+              isError: true);
         }
       } else {
         if (!mounted) return;
@@ -238,7 +247,8 @@ class ProfileTabState extends State<ProfileTab> {
       return;
     }
     if (!mounted) return;
-    _showStatusSnackBar('連携に失敗しました。${_friendlyErrorMessage(error)}', isError: true);
+    _showStatusSnackBar('連携に失敗しました。${_friendlyErrorMessage(error)}',
+        isError: true);
     setState(() => _isLoading = false);
   }
 
@@ -258,7 +268,8 @@ class ProfileTabState extends State<ProfileTab> {
       }
     } catch (e) {
       if (mounted) {
-        _showStatusSnackBar('記録の引き継ぎに失敗しました。${_friendlyErrorMessage(e)}', isError: true);
+        _showStatusSnackBar('記録の引き継ぎに失敗しました。${_friendlyErrorMessage(e)}',
+            isError: true);
       }
     }
   }
@@ -303,23 +314,23 @@ class ProfileTabState extends State<ProfileTab> {
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-          // Premium header with gradient
-          SliverToBoxAdapter(
-            child: _buildHeader(user, isGuest, emailText),
-          ),
+            // Premium header with gradient
+            SliverToBoxAdapter(
+              child: _buildHeader(user, isGuest, emailText),
+            ),
 
-          // Stats section
-          SliverToBoxAdapter(
-            child: _buildStatsSection(),
-          ),
+            // Stats section
+            SliverToBoxAdapter(
+              child: _buildStatsSection(),
+            ),
 
-          // Settings menu
-          SliverToBoxAdapter(
-            child: _buildSettingsSection(isGuest),
-          ),
+            // Settings menu
+            SliverToBoxAdapter(
+              child: _buildSettingsSection(isGuest),
+            ),
 
-          // Bottom spacing
-          const SliverToBoxAdapter(child: SizedBox(height: 120)),
+            // Bottom spacing
+            const SliverToBoxAdapter(child: SizedBox(height: 120)),
           ],
         ),
       ),
@@ -393,7 +404,8 @@ class ProfileTabState extends State<ProfileTab> {
 
               // Email
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.white.withAlpha(26),
                   borderRadius: BorderRadius.circular(20),
@@ -705,11 +717,11 @@ class ProfileTabState extends State<ProfileTab> {
               children: [
                 if (isGuest) ...[
                   _buildSettingsTile(
-                icon: PhosphorIcons.googleLogo(PhosphorIconsStyle.fill),
-                title: 'Googleで連携',
-                subtitle: 'データを安全に保存',
-                onTap: _isLoading
-                    ? null
+                    icon: PhosphorIcons.googleLogo(PhosphorIconsStyle.fill),
+                    title: 'Googleで連携',
+                    subtitle: 'データを安全に保存',
+                    onTap: _isLoading
+                        ? null
                         : () => _linkWithOAuth(OAuthProvider.google),
                     iconColor: const Color(0xFFDB4437),
                   ),
@@ -902,7 +914,8 @@ class ProfileTabState extends State<ProfileTab> {
       await Supabase.instance.client.auth.signOut();
       _showStatusSnackBar('サインアウトしました。');
     } catch (e) {
-      _showStatusSnackBar('サインアウトに失敗しました。${_friendlyErrorMessage(e)}', isError: true);
+      _showStatusSnackBar('サインアウトに失敗しました。${_friendlyErrorMessage(e)}',
+          isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -1053,16 +1066,19 @@ class ProfileTabState extends State<ProfileTab> {
           msgLower.contains('already') && msgLower.contains('registered');
       if (alreadyRegistered) {
         if (mounted) {
-          _showStatusSnackBar('このメールは既に登録されています。ログインから接続してください。', isError: true);
+          _showStatusSnackBar('このメールは既に登録されています。ログインから接続してください。',
+              isError: true);
         }
         await _showExistingEmailLoginDialog(prefillEmail: email);
         return;
       }
       if (!mounted) return;
-      _showStatusSnackBar('メール連携に失敗しました。${_friendlyErrorMessage(e)}', isError: true);
+      _showStatusSnackBar('メール連携に失敗しました。${_friendlyErrorMessage(e)}',
+          isError: true);
     } catch (e) {
       if (!mounted) return;
-      _showStatusSnackBar('メール連携に失敗しました。${_friendlyErrorMessage(e)}', isError: true);
+      _showStatusSnackBar('メール連携に失敗しました。${_friendlyErrorMessage(e)}',
+          isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -1089,10 +1105,12 @@ class ProfileTabState extends State<ProfileTab> {
       _showStatusSnackBar('ログインしました。ゲストの記録を引き継ぎました。');
     } on AuthException catch (e) {
       if (!mounted) return;
-      _showStatusSnackBar('ログインに失敗しました。${_friendlyErrorMessage(e)}', isError: true);
+      _showStatusSnackBar('ログインに失敗しました。${_friendlyErrorMessage(e)}',
+          isError: true);
     } catch (e) {
       if (!mounted) return;
-      _showStatusSnackBar('ログインに失敗しました。${_friendlyErrorMessage(e)}', isError: true);
+      _showStatusSnackBar('ログインに失敗しました。${_friendlyErrorMessage(e)}',
+          isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -1135,7 +1153,8 @@ class ProfileTabState extends State<ProfileTab> {
       _showStatusSnackBar('ゲストとしてサインアウトしました。');
     } catch (e) {
       if (!mounted) return;
-      _showStatusSnackBar('サインアウトに失敗しました。${_friendlyErrorMessage(e)}', isError: true);
+      _showStatusSnackBar('サインアウトに失敗しました。${_friendlyErrorMessage(e)}',
+          isError: true);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -1224,11 +1243,11 @@ class ProfileTabState extends State<ProfileTab> {
         break;
       }
     }
-    
+
     final currentLevel = levels[currentLevelIndex];
     final isMaxLevel = currentLevelIndex == levels.length - 1;
     final nextLevel = isMaxLevel ? null : levels[currentLevelIndex + 1];
-    
+
     // Calculate progress to next level
     double progress = 1.0;
     int scansToNext = 0;
@@ -1321,7 +1340,7 @@ class ProfileTabState extends State<ProfileTab> {
                     ],
                   ),
                 ),
-                
+
                 // Progress section
                 Padding(
                   padding: const EdgeInsets.all(24),
@@ -1375,7 +1394,8 @@ class ProfileTabState extends State<ProfileTab> {
                                       borderRadius: BorderRadius.circular(6),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: levelColors[currentLevelIndex][0]
+                                          color: levelColors[currentLevelIndex]
+                                                  [0]
                                               .withValues(alpha: 0.4),
                                           blurRadius: 4,
                                           offset: const Offset(0, 2),
@@ -1441,7 +1461,7 @@ class ProfileTabState extends State<ProfileTab> {
                         ),
                         const SizedBox(height: 20),
                       ],
-                      
+
                       // Level milestones
                       const Text(
                         'レベル一覧',
@@ -1456,7 +1476,7 @@ class ProfileTabState extends State<ProfileTab> {
                         final level = levels[index];
                         final isAchieved = scans >= level.$2;
                         final isCurrent = index == currentLevelIndex;
-                        
+
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Row(
@@ -1466,15 +1486,19 @@ class ProfileTabState extends State<ProfileTab> {
                                 height: 32,
                                 decoration: BoxDecoration(
                                   gradient: isAchieved
-                                      ? LinearGradient(colors: levelColors[index])
+                                      ? LinearGradient(
+                                          colors: levelColors[index])
                                       : null,
-                                  color: isAchieved ? null : Colors.grey.shade200,
+                                  color:
+                                      isAchieved ? null : Colors.grey.shade200,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   level.$3,
                                   size: 16,
-                                  color: isAchieved ? Colors.white : Colors.grey.shade400,
+                                  color: isAchieved
+                                      ? Colors.white
+                                      : Colors.grey.shade400,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -1482,7 +1506,9 @@ class ProfileTabState extends State<ProfileTab> {
                                 child: Text(
                                   level.$1,
                                   style: TextStyle(
-                                    fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                                    fontWeight: isCurrent
+                                        ? FontWeight.bold
+                                        : FontWeight.w500,
                                     color: isAchieved
                                         ? const Color(0xFF374151)
                                         : Colors.grey.shade400,
@@ -1518,7 +1544,7 @@ class ProfileTabState extends State<ProfileTab> {
                     ],
                   ),
                 ),
-                
+
                 // Close button
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -1584,7 +1610,8 @@ class ProfileTabState extends State<ProfileTab> {
       );
       _showStatusSnackBar('アバターを更新しました。');
     } catch (e) {
-      _showStatusSnackBar('アバター更新に失敗しました。${_friendlyErrorMessage(e)}', isError: true);
+      _showStatusSnackBar('アバター更新に失敗しました。${_friendlyErrorMessage(e)}',
+          isError: true);
     } finally {
       if (mounted) {
         setState(() {
@@ -1630,7 +1657,8 @@ class ProfileTabState extends State<ProfileTab> {
       );
       _showStatusSnackBar('名前を更新しました。');
     } catch (e) {
-      _showStatusSnackBar('名前の更新に失敗しました。${_friendlyErrorMessage(e)}', isError: true);
+      _showStatusSnackBar('名前の更新に失敗しました。${_friendlyErrorMessage(e)}',
+          isError: true);
     } finally {
       if (mounted) {
         setState(() => _isUpdatingProfile = false);
