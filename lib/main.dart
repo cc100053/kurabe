@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
+import 'package:provider/provider.dart' as legacy_provider;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -28,7 +29,7 @@ Future<void> main() async {
     ),
   );
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  runApp(const KurabeApp());
+  runApp(const ProviderScope(child: KurabeApp()));
 }
 
 Future<void> _loadEnv() async {
@@ -169,7 +170,7 @@ class _KurabeAppState extends State<KurabeApp> {
       ),
     );
 
-    return ChangeNotifierProvider(
+    return legacy_provider.ChangeNotifierProvider(
       create: (_) => AppState(),
       child: MaterialApp(
         title: 'Kurabe',

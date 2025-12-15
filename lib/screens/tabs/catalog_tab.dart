@@ -2,25 +2,27 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../main.dart';
-import '../../screens/tabs/profile_tab.dart';
 import '../../constants/categories.dart';
 import '../../constants/category_visuals.dart';
+import '../../providers/subscription_provider.dart';
+import '../../screens/paywall_screen.dart';
 import '../../screens/category_detail_screen.dart';
 import '../../services/supabase_service.dart';
 import '../../widgets/community_product_tile.dart';
 
-class CatalogTab extends StatefulWidget {
+class CatalogTab extends ConsumerStatefulWidget {
   const CatalogTab({super.key});
 
   @override
-  State<CatalogTab> createState() => _CatalogTabState();
+  ConsumerState<CatalogTab> createState() => _CatalogTabState();
 }
 
-class _CatalogTabState extends State<CatalogTab> {
+class _CatalogTabState extends ConsumerState<CatalogTab> {
   final SupabaseService _supabaseService = SupabaseService();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -29,9 +31,11 @@ class _CatalogTabState extends State<CatalogTab> {
   bool _isSearching = false;
   bool _isSearchFocused = false;
   List<Map<String, dynamic>> _searchResults = [];
+  List<Map<String, dynamic>> _mySearchResults = [];
+  int _communityResultCount = 0;
   Position? _currentPosition;
   Timer? _debounce;
-  bool _guestBlockedSearch = false;
+  ProviderSubscription<SubscriptionState>? _subscriptionSub;
 
   static final Map<String, CategoryVisual> _categoryVisuals = kCategoryVisuals;
 
@@ -40,6 +44,21 @@ class _CatalogTabState extends State<CatalogTab> {
     super.initState();
     _searchController.addListener(_onSearchChanged);
     _searchFocusNode.addListener(_onFocusChanged);
+    _subscriptionSub = ref.listenManual<SubscriptionState>(
+      subscriptionProvider,
+      (previous, next) {
+        final prevPro = previous?.isPro ?? false;
+        if (prevPro != next.isPro && _searchQuery.isNotEmpty) {
+          _performSearch(_searchQuery);
+        }
+        if (!next.isPro && mounted) {
+          setState(() {
+            _searchResults = [];
+            _communityResultCount = 0;
+          });
+        }
+      },
+    );
   }
 
   @override
@@ -47,6 +66,7 @@ class _CatalogTabState extends State<CatalogTab> {
     _debounce?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _subscriptionSub?.close();
     super.dispose();
   }
 
@@ -59,12 +79,15 @@ class _CatalogTabState extends State<CatalogTab> {
     if (next == _searchQuery) return;
     setState(() {
       _searchQuery = next;
-      _guestBlockedSearch = false;
     });
     _ensureLocation();
     _debounce?.cancel();
     if (next.isEmpty) {
-      setState(() => _searchResults = []);
+      setState(() {
+        _searchResults = [];
+        _mySearchResults = [];
+        _communityResultCount = 0;
+      });
       return;
     }
     _debounce = Timer(const Duration(milliseconds: 300), () {
@@ -73,25 +96,38 @@ class _CatalogTabState extends State<CatalogTab> {
   }
 
   Future<void> _performSearch(String query) async {
-    if (query.trim().isEmpty) return;
-    if (_supabaseService.isGuest) {
-      setState(() {
-        _isSearching = false;
-        _searchResults = [];
-        _guestBlockedSearch = true;
-      });
-      return;
-    }
-    setState(() => _isSearching = true);
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+    setState(() {
+      _isSearching = true;
+      _communityResultCount = 0;
+    });
     try {
-      final results = await _supabaseService.searchCommunityPrices(
-        query.trim(),
-        _currentPosition?.latitude,
-        _currentPosition?.longitude,
-      );
+      final myResults = await _supabaseService.searchMyPrices(trimmed);
+      final subState = ref.read(subscriptionProvider);
+      final isPro = subState.isPro;
+      List<Map<String, dynamic>> communityResults = [];
+      int communityCount = 0;
+      if (isPro) {
+        communityResults = await _supabaseService.searchCommunityPrices(
+          trimmed,
+          _currentPosition?.latitude,
+          _currentPosition?.longitude,
+        );
+        communityCount = communityResults.length;
+      } else {
+        communityCount = await _supabaseService.countCommunityPrices(
+          trimmed,
+          _currentPosition?.latitude,
+          _currentPosition?.longitude,
+          limit: 30,
+        );
+      }
       if (!mounted) return;
       setState(() {
-        _searchResults = results;
+        _mySearchResults = myResults;
+        _searchResults = communityResults;
+        _communityResultCount = communityCount;
         _isSearching = false;
       });
     } catch (_) {
@@ -99,6 +135,8 @@ class _CatalogTabState extends State<CatalogTab> {
       setState(() {
         _isSearching = false;
         _searchResults = [];
+        _mySearchResults = [];
+        _communityResultCount = 0;
       });
     }
   }
@@ -271,51 +309,8 @@ class _CatalogTabState extends State<CatalogTab> {
   }
 
   Widget _buildSearchResultsSliver() {
-    if (_guestBlockedSearch) {
-      return SliverFillRemaining(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: KurabeColors.warning.withAlpha(26),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    PhosphorIcons.lock(PhosphorIconsStyle.duotone),
-                    size: 48,
-                    color: KurabeColors.warning,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'コミュニティ検索は\n登録ユーザーのみ利用できます',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 17,
-                    color: KurabeColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ProfileTab()),
-                    );
-                  },
-                  child: const Text('新規登録'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+    final subState = ref.watch(subscriptionProvider);
+    final isPro = subState.isPro;
     if (_isSearching) {
       return const SliverFillRemaining(
         child: Center(
@@ -326,7 +321,9 @@ class _CatalogTabState extends State<CatalogTab> {
         ),
       );
     }
-    if (_searchResults.isEmpty) {
+    final hasResults =
+        _mySearchResults.isNotEmpty || (isPro && _searchResults.isNotEmpty);
+    if (!hasResults && _communityResultCount == 0) {
       return SliverFillRemaining(
         child: Center(
           child: Column(
@@ -351,27 +348,135 @@ class _CatalogTabState extends State<CatalogTab> {
         ),
       );
     }
-    final minUnitPriceByName = _findMinUnitPriceByName(_searchResults);
+    final children = <Widget>[];
+    if (_mySearchResults.isNotEmpty) {
+      children.addAll([
+        const Padding(
+          padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Text(
+            '自分の記録',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              color: KurabeColors.textPrimary,
+            ),
+          ),
+        ),
+        ..._mySearchResults.map(
+          (record) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: CommunityProductTile(record: record),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ]);
+    }
+    if (isPro && _searchResults.isNotEmpty) {
+      final minUnitPriceByName = _findMinUnitPriceByName(_searchResults);
+      children.addAll([
+        const Padding(
+          padding: EdgeInsets.fromLTRB(4, 8, 4, 8),
+          child: Text(
+            'コミュニティ価格',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              color: KurabeColors.textPrimary,
+            ),
+          ),
+        ),
+        ..._searchResults.map((record) {
+          final unitPrice = _computeUnitPrice(record);
+          final name =
+              (record['product_name'] as String?)?.trim().toLowerCase() ?? '';
+          final minForName = minUnitPriceByName[name];
+          final isCheapest = unitPrice != null &&
+              minForName != null &&
+              (unitPrice - minForName).abs() < 1e-6;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: CommunityProductTile(
+              record: record,
+              isCheapestOverride: isCheapest,
+            ),
+          );
+        }),
+      ]);
+    }
+    if (!isPro && _communityResultCount > 0) {
+      children.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: KurabeColors.primary.withAlpha(18),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: KurabeColors.primary.withAlpha(51)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(10),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        PhosphorIcons.lock(PhosphorIconsStyle.fill),
+                        color: KurabeColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Found $_communityResultCount cheaper options in the community!',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: KurabeColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Proで全ての店舗と価格を解放。',
+                  style: TextStyle(
+                    color: KurabeColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const PaywallScreen()),
+                    );
+                  },
+                  child: const Text('Unlock to see details'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       sliver: SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final record = _searchResults[index];
-            final unitPrice = _computeUnitPrice(record);
-            final name =
-                (record['product_name'] as String?)?.trim().toLowerCase() ?? '';
-            final minForName = minUnitPriceByName[name];
-            final isCheapest = unitPrice != null &&
-                minForName != null &&
-                (unitPrice - minForName).abs() < 1e-6;
-            return CommunityProductTile(
-              record: record,
-              isCheapestOverride: isCheapest,
-            );
-          },
-          childCount: _searchResults.length,
-        ),
+        delegate: SliverChildListDelegate(children),
       ),
     );
   }

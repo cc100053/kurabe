@@ -1,14 +1,15 @@
-Project: Flutter price-comparison app backed by Supabase with AI tag parsing, personal diary views, and community search. UI icons upgraded to Phosphor (nav + categories), Lucide beef for meat, and Material Symbols bento for惣菜.
+Project: Flutter price-comparison app backed by Supabase with AI tag parsing, personal diary views, community search, and RevenueCat subscriptions for カイログ Pro. UI icons upgraded to Phosphor (nav + categories), Lucide beef for meat, and Material Symbols bento for惣菜.
 
 What's wired up
 - Supabase bootstrap: `supabase_flutter` init in `main.dart` after dotenv; image upload to `price_tags`; inserts into `price_records`.
 - Add/Edit flow: Gemini 1.5 prompt extracts product/ raw_price / quantity / discount_info / price_type / category. UI supports quantity, original price, discount type/value, price type, shows unit price + taxed total (pre-tax discounts, 8% tax floor), and saves all new fields; best-price checks use unit price.
-- Community insight/search: RPCs for nearby cheapest and fuzzy product search; unit-price sort via updated `get_nearby_cheapest`.
+- Community insight/search: RPCs for nearby cheapest and fuzzy product search; unit-price sort via updated `get_nearby_cheapest`; non-Pro sees counts only, Pro sees full details.
 - Auth & profile: Guest/Google/Apple/email, guest-to-user data migration (including identity_already_exists), existing-email login with guest merge (now stays in-app and shows errors inline), in-app password reset dialog on Supabase passwordRecovery deep link.
 - Privacy controls: Timeline and catalog category view filter by `user_id` on the client; community search/nearby cheapest blocked for guests (app-side); guest users prompted to link instead of logout.
 - UI/UX: ProductDetailSheet with community insight (gated for guests), catalog tab with categories and gated search, saving dialogs, error SnackBars, and suggestion chips.
  - Category detail community view groups nearby records by product/shop/price/unit price/location, counts confirmations, returns latest record per group via `get_nearby_records_by_category`; UI shows confirmation badge when count > 1 and only marks cheapest per product.
 - Shopping list: available to guests and synced to Supabase using anonymous user id; same backend table `shopping_list_items` used for all users.
+- Subscriptions: RevenueCat integration (purchases_flutter + purchases_ui_flutter) with entitlement `カイログ Pro`, fallback RC key present, paywall + Customer Center entry points, and Supabase `profiles.is_pro` sync for RLS.
 
 ## UI/UX Overhaul (December 2024)
 
@@ -39,7 +40,7 @@ Database/RPC notes
 - price_records columns added (idempotent): quantity integer default 1, original_price numeric, price_type text default 'standard', discount_type text default 'none', discount_value numeric default 0, tax_rate real default 0.10. Ensure `user_id uuid` exists; app filters on this column.
 - get_nearby_cheapest recreated to ORDER BY price / GREATEST(quantity, 1) ASC then distance; fully qualified columns to avoid ambiguity.
 - transfer_guest_data(record_ids bigint[]) SECURITY DEFINER updates price_records.user_id = auth.uid() for provided ids.
-- RLS currently open for SELECT (USING true) to enable community search; app enforces user-scoped reads for private views.
+- RLS (price_records): insert all; select if user_id = auth.uid() or profiles.is_pro; update/delete only when user_id = auth.uid(). `profiles` table (id uuid PK FK auth.users, is_pro bool default false) with self-only select/insert/update.
 
 Remaining
 - Confirm `user_id` column exists and is populated on price_records; set RLS policies to enforce user-only reads/writes if desired.
@@ -56,6 +57,11 @@ Shopping list (new)
 Branding/launch
 - App/bundle ID updated to `com.cc100053.kurabe` across Android/iOS/macOS/Linux.
 - App icon and splash configured to use `assets/images/icon_square.png` via flutter_launcher_icons and flutter_native_splash (run the generators locally).
+- App display name changed to 「カイログ」 across Android/iOS/web/macOS/Windows/Linux.
+
+Places/shops
+- Nearby store fetch via Places searchNearby (distance sorted, convenience filtering tweaks).
+- Manual shop input now powered by Places Autocomplete (New) with location bias, sorted by `distanceMeters`, and Place Details lookup to capture lat/lng on selection.
 
 Current Supabase schema snapshot (price_records)
 - id bigint

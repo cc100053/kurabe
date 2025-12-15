@@ -49,3 +49,6 @@ app.*.map.json
 
 # Local environment
 .env
+
+# Database notes
+db.md

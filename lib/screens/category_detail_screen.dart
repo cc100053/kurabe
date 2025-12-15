@@ -1,26 +1,30 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../main.dart';
+import '../providers/subscription_provider.dart';
 import '../services/location_service.dart';
 import '../services/supabase_service.dart';
+import '../screens/paywall_screen.dart';
 import '../widgets/community_product_tile.dart';
 
 enum _CategoryView { mine, community }
 
-class CategoryDetailScreen extends StatefulWidget {
+class CategoryDetailScreen extends ConsumerStatefulWidget {
   const CategoryDetailScreen({super.key, required this.categoryName});
 
   final String categoryName;
 
   @override
-  State<CategoryDetailScreen> createState() => _CategoryDetailScreenState();
+  ConsumerState<CategoryDetailScreen> createState() =>
+      _CategoryDetailScreenState();
 }
 
-class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
+class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   final SupabaseService _supabaseService = SupabaseService();
 
   _CategoryView _selectedView = _CategoryView.mine;
@@ -32,12 +36,42 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   static const int _communityRadiusMeters = 3000;
   bool _guestBlocked = false;
   String? _locationError;
+  ProviderSubscription<SubscriptionState>? _subscriptionSub;
 
   @override
   void initState() {
     super.initState();
     _myRecordsFuture =
         _supabaseService.getMyRecordsByCategory(widget.categoryName.trim());
+    _subscriptionSub = ref.listenManual<SubscriptionState>(
+      subscriptionProvider,
+      (previous, next) {
+        final prevPro = previous?.isPro ?? false;
+        if (prevPro != next.isPro &&
+            mounted &&
+            _selectedView == _CategoryView.community) {
+          if (next.isPro) {
+            setState(() {
+              _guestBlocked = false;
+              _communityCache = null;
+              _communityCacheTime = null;
+              _communityFuture = _fetchCommunityRecords(forceRefresh: true);
+            });
+          } else {
+            setState(() {
+              _guestBlocked = true;
+              _communityFuture = null;
+            });
+          }
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _subscriptionSub?.close();
+    super.dispose();
   }
 
   void _onToggle(_CategoryView view) {
@@ -46,10 +80,15 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       _selectedView = view;
       _guestBlocked = false;
       _locationError = null;
-      if (view == _CategoryView.community) {
-        _communityFuture ??= _fetchCommunityRecords();
-      }
     });
+    if (view == _CategoryView.community) {
+      final isPro = ref.read(subscriptionProvider).isPro;
+      if (!isPro) {
+        setState(() => _guestBlocked = true);
+        return;
+      }
+      _communityFuture ??= _fetchCommunityRecords();
+    }
   }
 
   bool _isCommunityCacheFresh() {
@@ -62,6 +101,11 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   }) async {
     final trimmed = widget.categoryName.trim();
     if (trimmed.isEmpty) return [];
+    final isPro = ref.read(subscriptionProvider).isPro;
+    if (!isPro) {
+      setState(() => _guestBlocked = true);
+      return [];
+    }
     if (!forceRefresh && _isCommunityCacheFresh()) {
       return _communityCache!;
     }
@@ -335,9 +379,55 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   Widget _buildCommunityRecords() {
     _communityFuture ??= _fetchCommunityRecords();
     if (_guestBlocked) {
-      return _buildEmptyState(
-        icon: PhosphorIcons.lock(PhosphorIconsStyle.duotone),
-        message: 'コミュニティ情報は\n登録ユーザーのみ利用できます',
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: KurabeColors.primary.withAlpha(26),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  PhosphorIcons.lock(PhosphorIconsStyle.duotone),
+                  size: 48,
+                  color: KurabeColors.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'コミュニティ価格はPro限定です',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  color: KurabeColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'アップグレードして近隣の最安値を確認しましょう。',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: KurabeColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 18),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const PaywallScreen()),
+                  );
+                },
+                child: const Text('Unlock to see details'),
+              ),
+            ],
+          ),
+        ),
       );
     }
     if (_locationError != null) {

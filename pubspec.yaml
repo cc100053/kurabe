@@ -31,6 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   provider: ^6.0.5
+  flutter_riverpod: ^2.5.1
   sqflite: ^2.3.3+1
   path_provider: ^2.1.4
   geolocator: ^10.1.0
@@ -54,6 +55,8 @@ dependencies:
   lucide_icons: ^0.257.0
   material_symbols_icons: ^4.2797.0
   google_fonts: ^6.1.0
+  purchases_flutter: ^9.10.0
+  purchases_ui_flutter: ^9.10.0
 
 dev_dependencies:
   flutter_test:

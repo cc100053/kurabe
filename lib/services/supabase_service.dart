@@ -219,6 +219,85 @@ class SupabaseService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> searchMyPrices(
+    String query, {
+    int limit = 20,
+  }) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return [];
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return [];
+    try {
+      final List<dynamic> result = await _client
+          .from('price_records')
+          .select()
+          .eq('user_id', userId)
+          .ilike('product_name', '%$trimmed%')
+          .order('created_at', ascending: false)
+          .limit(limit);
+      return result
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    } on PostgrestException catch (e) {
+      final missingUserIdColumn =
+          e.code == '42703' && e.message.toLowerCase().contains('user_id');
+      if (missingUserIdColumn) {
+        _userIdColumnMissing = true;
+        return [];
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<int> countCommunityPrices(
+    String query,
+    double? lat,
+    double? lng, {
+    int limit = 20,
+  }) async {
+    try {
+      final results = await searchCommunityPrices(
+        query,
+        lat,
+        lng,
+        limit: limit,
+      );
+      return results.length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<int> countCheaperCommunityPrices({
+    required String productName,
+    required double userUnitPrice,
+    double? lat,
+    double? lng,
+    int limit = 20,
+  }) async {
+    try {
+      final results = await searchCommunityPrices(
+        productName,
+        lat,
+        lng,
+        limit: limit,
+      );
+      var count = 0;
+      for (final record in results) {
+        final price = _computeUnitPrice(record);
+        if (price != null && price + 1e-6 < userUnitPrice) {
+          count++;
+        }
+      }
+      return count;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getMyRecordsByCategory(
     String categoryTag,
   ) async {
@@ -348,5 +427,14 @@ class SupabaseService {
     });
 
     return deduped;
+  }
+
+  double? _computeUnitPrice(Map<String, dynamic> record) {
+    final explicit = (record['unit_price'] as num?)?.toDouble();
+    if (explicit != null) return explicit;
+    final price = (record['price'] as num?)?.toDouble();
+    final quantity = (record['quantity'] as num?)?.toDouble() ?? 1;
+    if (price == null) return null;
+    return price / (quantity <= 0 ? 1 : quantity);
   }
 }

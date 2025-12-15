@@ -2,23 +2,25 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 
 import '../services/location_service.dart';
 import '../services/supabase_service.dart';
-import '../screens/tabs/profile_tab.dart';
+import '../providers/subscription_provider.dart';
+import '../screens/paywall_screen.dart';
 
-class ProductDetailSheet extends StatefulWidget {
+class ProductDetailSheet extends ConsumerStatefulWidget {
   const ProductDetailSheet({super.key, required this.record});
 
   final Map<String, dynamic> record;
 
   @override
-  State<ProductDetailSheet> createState() => _ProductDetailSheetState();
+  ConsumerState<ProductDetailSheet> createState() => _ProductDetailSheetState();
 }
 
-class _ProductDetailSheetState extends State<ProductDetailSheet> {
+class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
   static const int _communityRadiusMeters = 3000;
   final SupabaseService _supabaseService = SupabaseService();
   final NumberFormat _priceFormat = NumberFormat.currency(
@@ -31,13 +33,35 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   bool _locationUnavailable = false;
   late final bool _isGuest;
   Position? _currentPosition;
+  int? _communityLockedCount;
 
   @override
   void initState() {
     super.initState();
     _isGuest = _supabaseService.isGuest;
     if (_isGuest) return;
-    _fetchInsight();
+    final subState = ref.read(subscriptionProvider);
+    if (subState.isPro) {
+      _fetchInsight();
+    } else {
+      _fetchLockedPreview();
+    }
+    ref.listen<SubscriptionState>(subscriptionProvider, (previous, next) {
+      final prevPro = previous?.isPro ?? false;
+      if (prevPro != next.isPro) {
+        if (next.isPro) {
+          _fetchInsight();
+        } else {
+          if (mounted) {
+            setState(() {
+              _communityBestPrice = null;
+              _isLoading = false;
+            });
+          }
+          _fetchLockedPreview();
+        }
+      }
+    });
   }
 
   Future<void> _fetchInsight({bool highAccuracy = false}) async {
@@ -54,12 +78,8 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
       _locationUnavailable = false;
     });
     try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
+      final position = await _obtainPosition(highAccuracy: highAccuracy);
+      if (position == null) {
         if (!mounted) return;
         setState(() {
           _communityBestPrice = null;
@@ -68,36 +88,9 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         });
         return;
       }
-
-      Position? position = LocationService.instance.cachedPosition;
-      if (position == null) {
-        position = await Geolocator.getLastKnownPosition();
-      }
-      if (position == null) {
-        try {
-          position = await Geolocator.getCurrentPosition(
-            desiredAccuracy:
-                highAccuracy ? LocationAccuracy.high : LocationAccuracy.low,
-            timeLimit: highAccuracy
-                ? const Duration(seconds: 8)
-                : const Duration(seconds: 4),
-          );
-        } on TimeoutException {
-          position = null;
-        }
-      }
-      if (position == null) {
-        if (!mounted) return;
-        setState(() {
-          _isLoading = false;
-          _locationUnavailable = true;
-        });
-        return;
-      }
       debugPrint(
         '⏱️ [インサイト] 位置取得: ${stopwatch.elapsedMilliseconds}ms',
       );
-      _currentPosition = position;
 
       final result = await _supabaseService.getNearbyCheapest(
         productName: productName,
@@ -122,6 +115,64 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
         _isLoading = false;
         _locationUnavailable = true;
       });
+    }
+  }
+
+  Future<Position?> _obtainPosition({bool highAccuracy = false}) async {
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return null;
+    }
+
+    Position? position = _currentPosition ?? LocationService.instance.cachedPosition;
+    position ??= await Geolocator.getLastKnownPosition();
+    if (position == null) {
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy:
+              highAccuracy ? LocationAccuracy.high : LocationAccuracy.low,
+          timeLimit:
+              highAccuracy ? const Duration(seconds: 8) : const Duration(seconds: 4),
+        );
+      } on TimeoutException {
+        position = null;
+      }
+    }
+    if (position != null) {
+      _currentPosition = position;
+    }
+    return position;
+  }
+
+  Future<void> _fetchLockedPreview() async {
+    final productName = (widget.record['product_name'] as String?)?.trim();
+    final userPrice = (widget.record['price'] as num?)?.toDouble();
+    final userQuantity = (widget.record['quantity'] as num?)?.toDouble() ?? 1;
+    final userUnitPrice = _computeUnitPrice(userPrice, userQuantity);
+    if (productName == null || productName.isEmpty || userUnitPrice == null) {
+      return;
+    }
+    try {
+      final position = await _obtainPosition();
+      final count = await _supabaseService.countCheaperCommunityPrices(
+        productName: productName,
+        userUnitPrice: userUnitPrice,
+        lat: position?.latitude,
+        lng: position?.longitude,
+        limit: 30,
+      );
+      if (!mounted) return;
+      setState(() {
+        _communityLockedCount = count;
+        _locationUnavailable = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _communityLockedCount = 0);
     }
   }
 
@@ -331,7 +382,9 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   }
 
   Widget _buildCommunityInsight(double? userPrice) {
-    if (_isGuest) {
+    final subState = ref.watch(subscriptionProvider);
+    final isPro = subState.isPro;
+    if (_isGuest || !isPro) {
       return _buildLockedInsightCard(context);
     }
     if (_locationUnavailable) {
@@ -461,6 +514,14 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
   }
 
   Widget _buildLockedInsightCard(BuildContext context) {
+    final count = _communityLockedCount;
+    final hasCount = count != null && count > 0;
+    final headline = hasCount
+        ? 'Found $count cheaper options in the community!'
+        : 'コミュニティ価格を解放しよう';
+    final subtitle = hasCount
+        ? 'Proで店舗名と価格の詳細を確認できます。'
+        : 'Proにアップグレードして周辺の最安値をチェックしましょう。';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -477,24 +538,32 @@ class _ProductDetailSheetState extends State<ProductDetailSheet> {
               Icon(Icons.lock_outline),
               SizedBox(width: 8),
               Text(
-                '近くの価格を解除',
+                'Pro限定',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            'サインアップしてどこでもっと安く購入できるか確認。',
+            headline,
             style: TextStyle(color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 10),
           ElevatedButton(
             onPressed: () {
-              Navigator.of(
-                context,
-              ).push(MaterialPageRoute(builder: (_) => const ProfileTab()));
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PaywallScreen()),
+              );
             },
-            child: const Text('アカウントを連携'),
+            child: const Text('Unlock to see details'),
           ),
         ],
       ),
