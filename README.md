@@ -58,12 +58,16 @@ Key packages:
 
 ## Supabase Notes
 
-- Required tables/RPCs: `price_records` (see progress.md for columns) and RPCs `get_nearby_cheapest`, `search_products_fuzzy`, `get_nearby_records_by_category`, `transfer_guest_data`
+- Required tables/RPCs: `price_records` (see progress.md), `shopping_list_items`, and RPCs `get_nearby_cheapest`, `search_products_fuzzy`, `get_nearby_records_by_category`, `search_community_prices`, `count_nearby_community_prices`, `transfer_guest_data`
 - Shopping list: add table `shopping_list_items` (id bigserial PK, user_id uuid FK auth.users not null, title text not null, is_done bool default false, created_at timestamptz default now()) with RLS allowing select/insert/update/delete when `auth.uid() = user_id`. Anonymous users also write with their auth.uid (Supabase anonymous session), so keep the same policy.
 - Auth redirect setup: keep `io.supabase.flutter://login-callback/` and the Supabase hosted callback in Supabase Auth → Redirect URLs; iOS Info.plist registers the `io.supabase.flutter` scheme for handoff. Password recovery uses the same redirect and is handled in-app.
-- Community endpoints expect authenticated users (anon is blocked in-app). RLS (price_records) allows insert all; select if user_id = auth.uid() or profiles.is_pro; update/delete only if user_id = auth.uid(). `profiles` table (id uuid FK auth.users, is_pro bool default false) has self-only select/insert/update.
-- Storage bucket `price_tags` must allow authenticated uploads; public read is used for image URLs
+- Community endpoints expect authenticated users (anon is blocked in-app). RLS (price_records) allows insert all; select if user_id = auth.uid() or profiles.is_pro; update/delete only if user_id = auth.uid(). `profiles` table (id uuid FK auth.users, is_pro bool default false) has self-only select/insert/update. `count_nearby_community_prices` runs as definer to return nearby community counts even for non-Pro.
+- Storage bucket `price_tags` stays public upload/read (app already uploads with anonymous/auth sessions).
 - Tax: app sends `is_tax_included` and `tax_rate` (0.08 for 飲食料品, 0.10 otherwise). Add `tax_rate real not null default 0.10` to `price_records` to persist it.
+
+## Dependency Notes
+
+- Currently pinned to `supabase` 2.10.0 / `supabase_flutter` 2.10.3. Newer versions exist; upgrade only after verifying auth/storage/RPC flows with `flutter pub upgrade` and app smoke tests.
 
 ## RevenueCat Setup
 

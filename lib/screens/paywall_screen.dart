@@ -13,13 +13,20 @@ class PaywallScreen extends ConsumerStatefulWidget {
   ConsumerState<PaywallScreen> createState() => _PaywallScreenState();
 }
 
-class _PaywallScreenState extends ConsumerState<PaywallScreen> {
+class _PaywallScreenState extends ConsumerState<PaywallScreen>
+    with SingleTickerProviderStateMixin {
   ProviderSubscription<SubscriptionState>? _sub;
-  int _selectedPlanIndex = 1; // Default to monthly (middle option)
+  int _selectedPlanIndex = 1;
+  late AnimationController _shimmerController;
 
   @override
   void initState() {
     super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+
     _sub = ref.listenManual<SubscriptionState>(
       subscriptionProvider,
       (previous, next) {
@@ -41,6 +48,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   @override
   void dispose() {
+    _shimmerController.dispose();
     _sub?.close();
     super.dispose();
   }
@@ -49,457 +57,720 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   Widget build(BuildContext context) {
     final subState = ref.watch(subscriptionProvider);
     final notifier = ref.read(subscriptionProvider.notifier);
-    final subscriptionService = SubscriptionService();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-              
-              // Close button
-              Align(
-                alignment: Alignment.topRight,
-                child: GestureDetector(
-                  onTap: () => Navigator.of(context).maybePop(),
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.close,
-                      size: 20,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 20),
-              
-              // App Icon
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: KurabeColors.primary.withAlpha(40),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: Image.asset(
-                    'assets/images/icon_square.png',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            KurabeColors.primary,
-                            KurabeColors.primary.withAlpha(180),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.shopping_cart,
-                        size: 48,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 24),
-              
-              // Title with highlight
-              RichText(
-                textAlign: TextAlign.center,
-                text: TextSpan(
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: KurabeColors.textPrimary,
-                    letterSpacing: -0.5,
-                  ),
-                  children: [
-                    const TextSpan(text: 'カイログ '),
-                    WidgetSpan(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: KurabeColors.primary.withAlpha(25),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: KurabeColors.primary.withAlpha(50),
-                            width: 2,
-                          ),
-                        ),
-                        child: const Text(
-                          'Pro',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                            color: KurabeColors.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 12),
-              
-              // Subtitle
-              Text(
-                'コミュニティの価格情報で\nもっとお得に買い物しよう',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey.shade600,
-                  height: 1.4,
-                ),
-              ),
-              
-              const SizedBox(height: 24),
-              
-              // Award badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(8),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      PhosphorIcons.crown(PhosphorIconsStyle.fill),
-                      size: 18,
-                      color: Colors.amber.shade700,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '毎月の節約に',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Text(
-                      'お役立ち',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: KurabeColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      PhosphorIcons.crown(PhosphorIconsStyle.fill),
-                      size: 18,
-                      color: Colors.amber.shade700,
-                    ),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 24),
-              
-              // Testimonial Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(8),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'お買い物上手の味方',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: KurabeColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    // Star rating
-                    Row(
-                      children: List.generate(
-                        5,
-                        (index) => const Icon(
-                          Icons.star_rounded,
-                          size: 20,
-                          color: Color(0xFFFFB800),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '「いつも行くスーパーで買っていた牛乳、近くの別のお店の方が50円も安いとわかりました。毎週の買い物で少しずつ節約できています！」',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade700,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '節約主婦ママ',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontStyle: FontStyle.italic,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 32),
-              
-              // Pricing tiers
-              Row(
-                children: [
-                  _buildPricingTier(
-                    index: 0,
-                    duration: '1',
-                    unit: '週間',
-                    price: '¥150',
-                    isSelected: _selectedPlanIndex == 0,
-                    isBestValue: false,
-                  ),
-                  const SizedBox(width: 12),
-                  _buildPricingTier(
-                    index: 1,
-                    duration: '1',
-                    unit: 'ヶ月',
-                    price: '¥350',
-                    isSelected: _selectedPlanIndex == 1,
-                    isBestValue: true,
-                  ),
-                  const SizedBox(width: 12),
-                  _buildPricingTier(
-                    index: 2,
-                    duration: '∞',
-                    unit: '買い切り',
-                    price: '¥1,200',
-                    isSelected: _selectedPlanIndex == 2,
-                    isBestValue: false,
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 24),
-              
-              // CTA Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: subState.isLoading || subState.isPro
-                      ? null
-                      : () => notifier.purchase(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: KurabeColors.accent,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade300,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: subState.isLoading
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Text(
-                          subState.isPro ? 'Pro 有効中 ✓' : '続ける',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                ),
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // Restore purchases
-              TextButton(
-                onPressed: subState.isLoading ? null : () => notifier.restore(),
-                child: Text(
-                  '購入を復元',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: KurabeColors.primary,
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 8),
-              
-              // Terms and Privacy
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildLinkButton(
-                    '利用規約',
-                    () => _showTermsDialog(context),
-                  ),
-                  Text(
-                    ' • ',
-                    style: TextStyle(color: Colors.grey.shade400),
-                  ),
-                  _buildLinkButton(
-                    'プライバシー',
-                    () => _showTermsDialog(context),
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 24),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFF8F9FA),
+              Color(0xFFEEF2F5),
             ],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                // Header with gradient background
+                _buildHeader(),
+
+                // Content
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 20),
+
+                      // Features card with glassmorphism
+                      _buildFeaturesCard(),
+
+                      const SizedBox(height: 24),
+
+                      // Pricing section
+                      _buildPricingSection(),
+
+                      const SizedBox(height: 24),
+
+                      // CTA Button
+                      _buildCTAButton(subState, notifier),
+
+                      const SizedBox(height: 16),
+
+                      // Restore & Terms
+                      _buildFooterLinks(subState, notifier),
+
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildPricingTier({
-    required int index,
-    required String duration,
-    required String unit,
-    required String price,
-    required bool isSelected,
-    required bool isBestValue,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedPlanIndex = index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? KurabeColors.accent : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSelected ? KurabeColors.accent : Colors.grey.shade200,
-              width: 2,
-            ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: KurabeColors.accent.withAlpha(40),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
+  Widget _buildHeader() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            KurabeColors.primary,
+            KurabeColors.primary.withAlpha(200),
+            const Color(0xFF2BB5A1),
+          ],
+        ),
+        borderRadius: const BorderRadius.vertical(
+          bottom: Radius.circular(32),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: KurabeColors.primary.withAlpha(60),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Column(
-                children: [
-                  // Best value badge
-                  if (isBestValue)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Decorative circles
+          Positioned(
+            right: -30,
+            top: -30,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withAlpha(15),
+              ),
+            ),
+          ),
+          Positioned(
+            left: -20,
+            bottom: -20,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withAlpha(10),
+              ),
+            ),
+          ),
+
+          // Content
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              children: [
+                // Close button
+                Align(
+                  alignment: Alignment.topRight,
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withAlpha(40),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                // App Icon with glow
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white.withAlpha(50),
+                        blurRadius: 20,
+                        spreadRadius: 5,
+                      ),
+                    ],
+                  ),
+                  child: Container(
+                    width: 88,
+                    height: 88,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(30),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
                         ),
-                        decoration: BoxDecoration(
-                          color: isSelected ? Colors.white : KurabeColors.accent,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Icon(
-                          Icons.check_circle,
-                          size: 16,
-                          color: isSelected ? KurabeColors.accent : Colors.white,
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(22),
+                      child: Image.asset(
+                        'assets/images/icon_inside.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.white,
+                          child: Icon(
+                            Icons.shopping_cart,
+                            size: 36,
+                            color: KurabeColors.primary,
+                          ),
                         ),
                       ),
                     ),
-                  
-                  // Duration
-                  Text(
-                    duration,
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                      color: isSelected ? Colors.white : KurabeColors.textPrimary,
-                    ),
                   ),
-                  Text(
-                    unit,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected
-                          ? Colors.white.withAlpha(200)
-                          : Colors.grey.shade600,
+                ),
+
+                const SizedBox(height: 16),
+
+                // Title
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'カイログ',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: -0.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  
-                  // Price
-                  Text(
-                    price,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: isSelected ? Colors.white : KurabeColors.accent,
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(20),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            PhosphorIcons.crown(PhosphorIconsStyle.fill),
+                            size: 16,
+                            color: const Color(0xFFFFB800),
+                          ),
+                          const SizedBox(width: 4),
+                          const Text(
+                            'Pro',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: KurabeColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                // Subtitle
+                Text(
+                  'お得に買い物するための必須ツール',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withAlpha(220),
                   ),
-                ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeaturesCard() {
+    return Column(
+      children: [
+        // Section title
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 40,
+              height: 2,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    KurabeColors.accent.withAlpha(100),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Row(
+              children: [
+                Icon(
+                  PhosphorIcons.sparkle(PhosphorIconsStyle.fill),
+                  color: KurabeColors.accent,
+                  size: 18,
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  'Proでできること',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: KurabeColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 40,
+              height: 2,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    KurabeColors.accent.withAlpha(100),
+                    Colors.transparent,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        
+        // Features card
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(8),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Features
+              _buildFeatureRow(
+                PhosphorIcons.users(PhosphorIconsStyle.fill),
+                'コミュニティの価格を閲覧',
+                'みんなが投稿した最安値をチェック',
+                KurabeColors.primary,
+              ),
+              const SizedBox(height: 16),
+              _buildFeatureRow(
+                PhosphorIcons.magnifyingGlass(PhosphorIconsStyle.fill),
+                'どこが最安か瞬時に検索',
+                '商品名で近くのお店を一括比較',
+                KurabeColors.success,
+              ),
+              const SizedBox(height: 16),
+              _buildFeatureRow(
+                PhosphorIcons.prohibit(PhosphorIconsStyle.fill),
+                '広告なしでサクサク',
+                '快適な操作体験を実現',
+                Colors.purple,
               ),
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildFeatureRow(
+    IconData icon,
+    String title,
+    String subtitle,
+    Color color,
+  ) {
+    return Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: color.withAlpha(20),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: KurabeColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Icon(
+          PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
+          color: KurabeColors.success,
+          size: 20,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPricingSection() {
+    return Column(
+      children: [
+        // Section title
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 40,
+              height: 2,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    KurabeColors.primary.withAlpha(100),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'プランを選択',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: KurabeColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 40,
+              height: 2,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    KurabeColors.primary.withAlpha(100),
+                    Colors.transparent,
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Pricing cards
+        Row(
+          children: [
+            _buildPricingCard(
+              index: 0,
+              duration: '1',
+              unit: 'ヶ月',
+              price: '¥350',
+              perMonth: '¥350/月',
+              isSelected: _selectedPlanIndex == 0,
+              badge: null,
+            ),
+            const SizedBox(width: 10),
+            _buildPricingCard(
+              index: 1,
+              duration: '3',
+              unit: 'ヶ月',
+              price: '¥950',
+              perMonth: '¥317/月',
+              isSelected: _selectedPlanIndex == 1,
+              badge: 'おすすめ',
+            ),
+            const SizedBox(width: 10),
+            _buildPricingCard(
+              index: 2,
+              duration: '1',
+              unit: '年',
+              price: '¥3,300',
+              perMonth: '¥275/月',
+              isSelected: _selectedPlanIndex == 2,
+              badge: '最安',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPricingCard({
+    required int index,
+    required String duration,
+    required String unit,
+    required String price,
+    required String perMonth,
+    required bool isSelected,
+    String? badge,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedPlanIndex = index),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Main card
+            AspectRatio(
+              aspectRatio: 1.0,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 100),
+                curve: Curves.easeOut,
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+                decoration: BoxDecoration(
+                  color: isSelected ? KurabeColors.accent : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isSelected ? KurabeColors.accent : Colors.grey.shade200,
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isSelected 
+                          ? KurabeColors.accent.withAlpha(40)
+                          : Colors.black.withAlpha(5),
+                      blurRadius: isSelected ? 12 : 8,
+                      offset: Offset(0, isSelected ? 4 : 2),
+                    ),
+                  ],
+                ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Duration
+                    Text(
+                      duration,
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: isSelected ? Colors.white : KurabeColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      unit,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? Colors.white.withAlpha(200)
+                            : Colors.grey.shade500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Price
+                    Text(
+                      price,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: isSelected ? Colors.white : KurabeColors.accent,
+                      ),
+                    ),
+
+                    // Per month
+                    Text(
+                      perMonth,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isSelected
+                            ? Colors.white.withAlpha(180)
+                            : Colors.grey.shade400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+            
+            // Floating badge
+            if (badge != null)
+              Positioned(
+                top: -10,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.white : KurabeColors.accent,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(15),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      badge,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: isSelected ? KurabeColors.accent : Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildCTAButton(SubscriptionState subState, SubscriptionNotifier notifier) {
+    return Container(
+      width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            KurabeColors.accent,
+            KurabeColors.accent.withAlpha(220),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: KurabeColors.accent.withAlpha(60),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: subState.isLoading || subState.isPro
+            ? null
+            : () => notifier.purchase(),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: Colors.grey.shade300,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: subState.isLoading
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    subState.isPro
+                        ? PhosphorIcons.checkCircle(PhosphorIconsStyle.fill)
+                        : PhosphorIcons.crown(PhosphorIconsStyle.fill),
+                    size: 22,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    subState.isPro ? 'Pro 有効中' : 'Proを始める',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildFooterLinks(SubscriptionState subState, SubscriptionNotifier notifier) {
+    return Column(
+      children: [
+        TextButton(
+          onPressed: subState.isLoading ? null : () => notifier.restore(),
+          child: const Text(
+            '購入を復元',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: KurabeColors.primary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildLinkButton('利用規約', () => _showTermsDialog(context)),
+            Text(' • ', style: TextStyle(color: Colors.grey.shade400)),
+            _buildLinkButton('プライバシー', () => _showTermsDialog(context)),
+          ],
+        ),
+      ],
     );
   }
 
@@ -509,7 +780,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
       child: Text(
         text,
         style: TextStyle(
-          fontSize: 13,
+          fontSize: 12,
           color: Colors.grey.shade500,
           decoration: TextDecoration.underline,
         ),

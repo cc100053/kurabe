@@ -34,6 +34,7 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
   late final bool _isGuest;
   Position? _currentPosition;
   int? _communityLockedCount;
+  ProviderSubscription<SubscriptionState>? _subscriptionSub;
 
   @override
   void initState() {
@@ -46,7 +47,8 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
     } else {
       _fetchLockedPreview();
     }
-    ref.listen<SubscriptionState>(subscriptionProvider, (previous, next) {
+    _subscriptionSub = ref.listenManual<SubscriptionState>(
+        subscriptionProvider, (previous, next) {
       final prevPro = previous?.isPro ?? false;
       if (prevPro != next.isPro) {
         if (next.isPro) {
@@ -62,6 +64,12 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
         }
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _subscriptionSub?.close();
+    super.dispose();
   }
 
   Future<void> _fetchInsight({bool highAccuracy = false}) async {

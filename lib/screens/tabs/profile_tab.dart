@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../main.dart';
 import '../../constants/auth.dart';
 import '../../services/supabase_service.dart';
+import '../paywall_screen.dart';
 
 class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
@@ -754,6 +755,18 @@ class ProfileTabState extends State<ProfileTab> {
                     iconColor: KurabeColors.accent,
                   ),
                 ] else ...[
+                  _buildSettingsTile(
+                    icon: PhosphorIcons.crown(PhosphorIconsStyle.fill),
+                    title: 'Proにアップグレード',
+                    subtitle: 'コミュニティ価格を解放',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PaywallScreen(),
+                      ),
+                    ),
+                    iconColor: KurabeColors.accent,
+                  ),
+                  _buildTileDivider(),
                   _buildSettingsTile(
                     icon: PhosphorIcons.signOut(PhosphorIconsStyle.fill),
                     title: 'ログアウト',

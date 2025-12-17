@@ -54,6 +54,16 @@ Shopping list (new)
 - Service/model: `ShoppingListService` handles fetch/add/toggle/delete; `ShoppingListItem` model.
 - Status: Requires Supabase table + policies above; no other backend changes.
 
+Supabase schema updates (applied)
+- `price_records.user_id` now `not null` with default `auth.uid()` plus BEFORE INSERT trigger to fill/guard against null.
+- Null user_id rows backfilled to placeholder UUID `00000000-0000-0000-0000-000000000000`.
+- Dropped redundant trigram index `idx_product_name_fuzzy` (kept `idx_price_records_product_name_trgm`).
+- RPCs present as `security definer`: `get_nearby_cheapest`, `search_community_prices` (returns self + community), `count_nearby_community_prices` (ignores RLS for counts), `search_products_fuzzy`, `get_nearby_records_by_category`.
+- Storage: `price_tags` remains public upload/read to match app uploads (anonymous session OK).
+
+Dependencies
+- `supabase` 2.10.0 / `supabase_flutter` 2.10.3 currently pinned. `flutter pub outdated` warns about newer majors; we’re intentionally staying on pinned versions until we schedule a tested upgrade.
+
 Branding/launch
 - App/bundle ID updated to `com.cc100053.kurabe` across Android/iOS/macOS/Linux.
 - App icon and splash configured to use `assets/images/icon_square.png` via flutter_launcher_icons and flutter_native_splash (run the generators locally).
