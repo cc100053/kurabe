@@ -19,4 +19,7 @@ Progress snapshot
   - Ensure Supabase RLS and triggers match production (user_id defaults, guest-to-user transfer function).
   - Deploy/verify `shopping_list_items` table + policies in production and smoke test list CRUD for guests and signed-in users.
   - Keep RevenueCat package identifiers (`monthly`, `quarterly`, `annual`) aligned with dashboard offerings; run purchase/restore/paywall regression.
-  - Run `flutter analyze` and `flutter test` before release; perform end-to-end capture → save → community search → paywall flows after backend changes.
+- Run `flutter analyze` and `flutter test` before release; perform end-to-end capture → save → community search → paywall flows after backend changes.
+
+Step 1 status
+- Completed: centralized AppConfig injection (env keys for Supabase/RevenueCat/Gemini/Places), price history migrated to Riverpod provider, entry wiring updated to use ProviderScope overrides.

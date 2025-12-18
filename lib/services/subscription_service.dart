@@ -6,12 +6,16 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:purchases_ui_flutter/purchases_ui_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/config/app_config.dart';
+
 /// Handles RevenueCat initialization, login and entitlement syncing.
 class SubscriptionService {
-  SubscriptionService({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+  SubscriptionService({SupabaseClient? client, AppConfig? config})
+      : _client = client ?? Supabase.instance.client,
+        _config = config;
 
   final SupabaseClient _client;
+  final AppConfig? _config;
   bool _configured = false;
   bool _hasListener = false;
 
@@ -20,7 +24,9 @@ class SubscriptionService {
 
   Future<bool> configure() async {
     if (_configured) return true;
-    final envKey = (dotenv.env['REVENUECAT_API_KEY'] ?? '').trim();
+    final envKey =
+        (_config?.revenuecatApiKey ?? dotenv.env['REVENUECAT_API_KEY'] ?? '')
+            .trim();
     final revenuecatKey = envKey.isNotEmpty ? envKey : _fallbackApiKey;
     try {
       final userId = _client.auth.currentUser?.id;

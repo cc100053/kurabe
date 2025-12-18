@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/config/app_config.dart';
 import '../services/subscription_service.dart';
 
 class SubscriptionState {
@@ -219,5 +220,6 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
 
 final subscriptionProvider =
     StateNotifierProvider<SubscriptionNotifier, SubscriptionState>((ref) {
-  return SubscriptionNotifier(SubscriptionService());
+  final config = ref.watch(appConfigProvider);
+  return SubscriptionNotifier(SubscriptionService(config: config));
 });

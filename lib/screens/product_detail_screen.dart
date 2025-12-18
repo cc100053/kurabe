@@ -1,23 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 
-import '../providers/app_state.dart';
+import '../presentation/providers/price_history_provider.dart';
 
-class ProductDetailScreen extends StatelessWidget {
-  const ProductDetailScreen(
-      {super.key, required this.productId, required this.productName});
+class ProductDetailScreen extends ConsumerWidget {
+  const ProductDetailScreen({
+    super.key,
+    required this.productId,
+    required this.productName,
+  });
 
   final int productId;
   final String productName;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final formatter = NumberFormat('#,###');
+    final historyFuture =
+        ref.read(priceHistoryProvider.notifier).historyForProduct(productId);
     return Scaffold(
       appBar: AppBar(title: Text(productName)),
       body: FutureBuilder(
-        future: context.read<AppState>().historyForProduct(productId),
+        future: historyFuture,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());

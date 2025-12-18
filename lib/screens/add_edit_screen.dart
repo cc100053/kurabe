@@ -3,15 +3,16 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../constants/categories.dart';
 import '../constants/category_visuals.dart';
+import '../data/config/app_config.dart';
 import '../main.dart';
 import '../services/gemini_service.dart';
 import '../services/location_service.dart';
@@ -25,18 +26,18 @@ enum _InsightState { idle, loading, none, found, best }
 
 enum _DiscountType { none, percentage, fixedAmount }
 
-class AddEditScreen extends StatefulWidget {
+class AddEditScreen extends ConsumerStatefulWidget {
   const AddEditScreen({super.key});
 
   @override
-  State<AddEditScreen> createState() => _AddEditScreenState();
+  ConsumerState<AddEditScreen> createState() => _AddEditScreenState();
 }
 
-class _AddEditScreenState extends State<AddEditScreen> {
+class _AddEditScreenState extends ConsumerState<AddEditScreen> {
   static const String _manualInputSentinel = '__manual_shop_input__';
-  static final String _placesApiKey = dotenv.env['GOOGLE_PLACES_API_KEY'] ?? '';
   static const int _insightRadiusMeters = 3000;
 
+  late final String _placesApiKey;
   bool _isCategorySheetOpen = false;
   final _productController = TextEditingController();
   final _originalPriceController = TextEditingController();
@@ -47,9 +48,9 @@ class _AddEditScreenState extends State<AddEditScreen> {
   String _priceType = 'standard';
   _DiscountType _selectedDiscountType = _DiscountType.none;
   final _shopFocusNode = FocusNode();
-  final GeminiService _geminiService = GeminiService();
-  final GooglePlacesService _placeService = GooglePlacesService();
-  final SupabaseService _supabaseService = SupabaseService();
+  late final GeminiService _geminiService;
+  late final GooglePlacesService _placeService;
+  late final SupabaseService _supabaseService;
 
   bool _isTaxIncluded = false;
   double _taxRate = 0.10;
@@ -76,6 +77,11 @@ class _AddEditScreenState extends State<AddEditScreen> {
   @override
   void initState() {
     super.initState();
+    final config = ref.read(appConfigProvider);
+    _placesApiKey = config.googlePlacesApiKey ?? '';
+    _geminiService = GeminiService(apiKey: config.geminiApiKey);
+    _placeService = GooglePlacesService();
+    _supabaseService = SupabaseService();
     _productController.addListener(_onNameChanged);
     _hydratePrefetchedShops();
     _selectedCategory = 'その他';
@@ -290,11 +296,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
       const Duration(milliseconds: 350),
       () => _fetchShopPredictions(value),
     );
-  }
-
-  void _clearShopPredictions() {
-    if (_shopPredictions.isEmpty) return;
-    setState(() => _shopPredictions = []);
   }
 
   List<PlaceAutocompletePrediction> _sortPredictions(
@@ -1479,7 +1480,7 @@ class _AddEditScreenState extends State<AddEditScreen> {
     if (pricing == null) return null;
     final quantity = _parseQuantity();
     final taxedTotal = pricing.$3;
-    if (taxedTotal == null || quantity <= 0) return null;
+    if (quantity <= 0) return null;
     return taxedTotal / quantity;
   }
 
@@ -2235,188 +2236,6 @@ class _AddEditScreenState extends State<AddEditScreen> {
           ),
         );
       },
-    );
-  }
-}
-
-// Helper class for tax rate options
-class _TaxRateOption {
-  final double value;
-  final String label;
-  final String subtitle;
-  final IconData icon;
-  final Color iconColor;
-
-  const _TaxRateOption({
-    required this.value,
-    required this.label,
-    required this.subtitle,
-    required this.icon,
-    required this.iconColor,
-  });
-}
-
-// Generic dropdown option for bottom sheet
-class _DropdownOption<T> {
-  final T value;
-  final String label;
-  final String subtitle;
-  final IconData icon;
-  final Color iconColor;
-
-  const _DropdownOption({
-    required this.value,
-    required this.label,
-    required this.subtitle,
-    required this.icon,
-    required this.iconColor,
-  });
-}
-
-// Modern dropdown bottom sheet widget
-class _ModernDropdownSheet<T> extends StatelessWidget {
-  final String title;
-  final List<_DropdownOption<T>> options;
-  final T selectedValue;
-
-  const _ModernDropdownSheet({
-    required this.title,
-    required this.options,
-    required this.selectedValue,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: KurabeColors.surfaceElevated,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: KurabeColors.border,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          // Title
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
-            child: Row(
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: KurabeColors.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Options list
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            child: Column(
-              children: options.map((option) {
-                final isSelected = option.value == selectedValue;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => Navigator.pop(context, option.value),
-                      borderRadius: BorderRadius.circular(16),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? KurabeColors.primary.withAlpha(20)
-                              : KurabeColors.background,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isSelected
-                                ? KurabeColors.primary
-                                : KurabeColors.border,
-                            width: isSelected ? 2 : 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: option.iconColor.withAlpha(26),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                option.icon,
-                                size: 22,
-                                color: option.iconColor,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    option.label,
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: isSelected
-                                          ? FontWeight.w700
-                                          : FontWeight.w600,
-                                      color: isSelected
-                                          ? KurabeColors.primary
-                                          : KurabeColors.textPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    option.subtitle,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: KurabeColors.textTertiary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (isSelected)
-                              Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: KurabeColors.primary,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.check_rounded,
-                                  size: 18,
-                                  color: Colors.white,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
