@@ -8,5 +8,6 @@ Tech stack
 - AI: Google Gemini 1.5 Flash (`google_generative_ai`) for price-tag OCR and structured extraction.
 - Location & maps: `geolocator` for permission/position; Google Places API (REST) for `searchNearby`, Autocomplete, and Place Details via `http`; custom filtering of store types.
 - Data & storage: Supabase `price_records`/`shopping_list_items` CRUD via REST; local SQLite (`sqflite`, `path_provider`) for product/shop/price history cache; image upload to Supabase storage; `cached_network_image` for display.
+- Data layer structure: Price flow uses `PriceRepository` + `PriceRemoteDataSource` + `PriceRecordMapper`/`PriceCalculator` for typed payloads, best-price checks, and deduplication; `ShoppingListService` covers list CRUD.
 - UI libraries: `phosphor_flutter`, `lucide_icons`, Material Symbols; custom widgets for product tiles, paywall, camera overlay; `flutter_image_compress` + `image_picker` for capture.
 - Utilities & config: `flutter_dotenv` for secrets, `intl` for JP date formatting, `path` utilities, `provider` legacy interop. Testing via `flutter test`; linting via `flutter analyze`.

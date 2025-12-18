@@ -3,6 +3,8 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 
+import '../../data/mappers/price_record_mapper.dart';
+import '../../data/models/price_record_model.dart';
 import '../../main.dart';
 import '../../widgets/community_product_tile.dart';
 
@@ -14,7 +16,8 @@ class TimelineTab extends StatefulWidget {
 }
 
 class _TimelineTabState extends State<TimelineTab> {
-  Stream<List<Map<String, dynamic>>>? _stream;
+  final PriceRecordMapper _mapper = PriceRecordMapper();
+  Stream<List<PriceRecordModel>>? _stream;
 
   @override
   void initState() {
@@ -22,14 +25,18 @@ class _TimelineTabState extends State<TimelineTab> {
     _stream = _buildStream();
   }
 
-  Stream<List<Map<String, dynamic>>>? _buildStream() {
+  Stream<List<PriceRecordModel>>? _buildStream() {
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
     if (currentUserId == null) return null;
     return Supabase.instance.client
         .from('price_records')
         .stream(primaryKey: ['id'])
         .eq('user_id', currentUserId)
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .map((rows) => rows
+            .whereType<Map>()
+            .map((row) => _mapper.fromMap(Map<String, dynamic>.from(row)))
+            .toList());
   }
 
   Future<void> _onRefresh() async {
@@ -137,9 +144,9 @@ class _TimelineTabState extends State<TimelineTab> {
                   title: 'ログインしてください',
                   subtitle: 'タイムラインを見るにはログインが必要です',
                 ),
-              )
+            )
             else
-              StreamBuilder<List<Map<String, dynamic>>>(
+              StreamBuilder<List<PriceRecordModel>>(
                 stream: stream,
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
@@ -356,12 +363,11 @@ class _TimelineTabState extends State<TimelineTab> {
     );
   }
 
-  List<_DateGroup> _groupRecordsByDate(List<Map<String, dynamic>> records) {
-    final groups = <String, List<Map<String, dynamic>>>{};
+  List<_DateGroup> _groupRecordsByDate(List<PriceRecordModel> records) {
+    final groups = <String, List<PriceRecordModel>>{};
     for (final record in records) {
-      final dateStr = record['created_at'] as String?;
-      if (dateStr == null) continue;
-      final date = DateTime.parse(dateStr).toLocal();
+      final date = record.createdAt?.toLocal();
+      if (date == null) continue;
       final key = _getDateLabel(date);
       groups.putIfAbsent(key, () => []).add(record);
     }
@@ -390,6 +396,6 @@ class _TimelineTabState extends State<TimelineTab> {
 
 class _DateGroup {
   final String dateLabel;
-  final List<Map<String, dynamic>> records;
+  final List<PriceRecordModel> records;
   _DateGroup(this.dateLabel, this.records);
 }

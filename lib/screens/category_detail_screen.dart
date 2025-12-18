@@ -5,10 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import '../data/models/price_record_model.dart';
+import '../data/repositories/price_repository.dart';
+import '../domain/price/price_calculator.dart';
 import '../main.dart';
 import '../providers/subscription_provider.dart';
 import '../services/location_service.dart';
-import '../services/supabase_service.dart';
 import '../screens/paywall_screen.dart';
 import '../widgets/community_product_tile.dart';
 
@@ -25,12 +27,13 @@ class CategoryDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
-  final SupabaseService _supabaseService = SupabaseService();
+  final PriceRepository _priceRepository = PriceRepository();
+  final PriceCalculator _priceCalculator = const PriceCalculator();
 
   _CategoryView _selectedView = _CategoryView.mine;
-  Future<List<Map<String, dynamic>>>? _myRecordsFuture;
-  Future<List<Map<String, dynamic>>>? _communityFuture;
-  List<Map<String, dynamic>>? _communityCache;
+  Future<List<PriceRecordModel>>? _myRecordsFuture;
+  Future<List<PriceRecordModel>>? _communityFuture;
+  List<PriceRecordModel>? _communityCache;
   DateTime? _communityCacheTime;
   static const Duration _communityCacheTtl = Duration(minutes: 10);
   static const int _communityRadiusMeters = 3000;
@@ -42,7 +45,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   void initState() {
     super.initState();
     _myRecordsFuture =
-        _supabaseService.getMyRecordsByCategory(widget.categoryName.trim());
+        _priceRepository.getMyRecordsByCategory(widget.categoryName.trim());
     _subscriptionSub = ref.listenManual<SubscriptionState>(
       subscriptionProvider,
       (previous, next) {
@@ -96,22 +99,22 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     return DateTime.now().difference(_communityCacheTime!) < _communityCacheTtl;
   }
 
-  Future<List<Map<String, dynamic>>> _fetchCommunityRecords({
+  Future<List<PriceRecordModel>> _fetchCommunityRecords({
     bool forceRefresh = false,
   }) async {
     final trimmed = widget.categoryName.trim();
-    if (trimmed.isEmpty) return [];
+    if (trimmed.isEmpty) return <PriceRecordModel>[];
     final isPro = ref.read(subscriptionProvider).isPro;
     if (!isPro) {
       setState(() => _guestBlocked = true);
-      return [];
+      return <PriceRecordModel>[];
     }
     if (!forceRefresh && _isCommunityCacheFresh()) {
       return _communityCache!;
     }
-    if (_supabaseService.isGuest) {
+    if (_priceRepository.isGuest) {
       setState(() => _guestBlocked = true);
-      return [];
+      return <PriceRecordModel>[];
     }
 
     final cachedLatLng = LocationService.instance.getFreshLatLng(
@@ -126,15 +129,15 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     }
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
-      if (!mounted) return [];
+      if (!mounted) return <PriceRecordModel>[];
       setState(() => _locationError = '位置情報の許可が必要です');
-      return [];
+      return <PriceRecordModel>[];
     }
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      if (!mounted) return [];
+      if (!mounted) return <PriceRecordModel>[];
       setState(() => _locationError = '位置情報サービスをオンにしてください');
-      return [];
+      return <PriceRecordModel>[];
     }
 
     Position? position;
@@ -161,14 +164,14 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
       }
     }
     if (lat == null || lng == null) {
-      if (!mounted) return [];
+      if (!mounted) return <PriceRecordModel>[];
       setState(() => _locationError = '現在地を取得できませんでした');
-      return [];
+      return <PriceRecordModel>[];
     }
 
-    if (!mounted) return [];
+    if (!mounted) return <PriceRecordModel>[];
     setState(() => _locationError = null);
-    final result = await _supabaseService.getNearbyRecordsByCategory(
+    final result = await _priceRepository.getNearbyRecordsByCategory(
       categoryTag: trimmed,
       lat: lat,
       lng: lng,
@@ -343,7 +346,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   }
 
   Widget _buildMyRecords() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
+    return FutureBuilder<List<PriceRecordModel>>(
       future: _myRecordsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -446,7 +449,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
         });
         await _communityFuture;
       },
-      child: FutureBuilder<List<Map<String, dynamic>>>(
+      child: FutureBuilder<List<PriceRecordModel>>(
         future: _communityFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -474,10 +477,8 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             itemCount: records.length,
             itemBuilder: (context, index) {
               final record = records[index];
-              final unitPrice = _computeUnitPrice(record);
-              final productName =
-                  (record['product_name'] as String?)?.trim().toLowerCase() ??
-                      '';
+              final unitPrice = _effectiveUnitPrice(record);
+              final productName = record.productName.trim().toLowerCase();
               final minForName = minUnitPriceByName[productName];
               final isCheapest = unitPrice != null &&
                   minForName != null &&
@@ -564,24 +565,22 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     );
   }
 
-  double? _computeUnitPrice(Map<String, dynamic> record) {
-    final explicit = (record['unit_price'] as num?)?.toDouble();
-    if (explicit != null) return explicit;
-    final price = (record['price'] as num?)?.toDouble();
-    final quantity = (record['quantity'] as num?)?.toDouble() ?? 1;
-    if (price == null) return null;
-    return price / (quantity <= 0 ? 1 : quantity);
+  double? _effectiveUnitPrice(PriceRecordModel record) {
+    return record.effectiveUnitPrice ??
+        _priceCalculator.unitPrice(
+          price: record.price,
+          quantity: record.quantity,
+        );
   }
 
   Map<String, double> _findMinUnitPriceByName(
-    List<Map<String, dynamic>> records,
+    List<PriceRecordModel> records,
   ) {
     final map = <String, double>{};
     for (final record in records) {
-      final unitPrice = _computeUnitPrice(record);
+      final unitPrice = _effectiveUnitPrice(record);
       if (unitPrice == null) continue;
-      final name =
-          (record['product_name'] as String?)?.trim().toLowerCase() ?? '';
+      final name = record.productName.trim().toLowerCase();
       if (name.isEmpty) continue;
       final current = map[name];
       if (current == null || unitPrice < current) {

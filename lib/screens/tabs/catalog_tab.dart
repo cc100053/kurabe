@@ -6,13 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import '../../data/models/price_record_model.dart';
+import '../../data/repositories/price_repository.dart';
+import '../../domain/price/price_calculator.dart';
 import '../../main.dart';
 import '../../constants/categories.dart';
 import '../../constants/category_visuals.dart';
 import '../../providers/subscription_provider.dart';
 import '../../screens/paywall_screen.dart';
 import '../../screens/category_detail_screen.dart';
-import '../../services/supabase_service.dart';
 import '../../widgets/community_product_tile.dart';
 
 class CatalogTab extends ConsumerStatefulWidget {
@@ -23,15 +25,16 @@ class CatalogTab extends ConsumerStatefulWidget {
 }
 
 class _CatalogTabState extends ConsumerState<CatalogTab> {
-  final SupabaseService _supabaseService = SupabaseService();
+  final PriceRepository _priceRepository = PriceRepository();
+  final PriceCalculator _priceCalculator = const PriceCalculator();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
   String _searchQuery = '';
   bool _isSearching = false;
   bool _isSearchFocused = false;
-  List<Map<String, dynamic>> _searchResults = [];
-  List<Map<String, dynamic>> _mySearchResults = [];
+  List<PriceRecordModel> _searchResults = [];
+  List<PriceRecordModel> _mySearchResults = [];
   int _communityResultCount = 0;
   Position? _currentPosition;
   Timer? _debounce;
@@ -103,20 +106,20 @@ class _CatalogTabState extends ConsumerState<CatalogTab> {
       _communityResultCount = 0;
     });
     try {
-      final myResults = await _supabaseService.searchMyPrices(trimmed);
+      final myResults = await _priceRepository.searchMyPrices(trimmed);
       final subState = ref.read(subscriptionProvider);
       final isPro = subState.isPro;
-      List<Map<String, dynamic>> communityResults = [];
+      List<PriceRecordModel> communityResults = [];
       int communityCount = 0;
       if (isPro) {
-        communityResults = await _supabaseService.searchCommunityPrices(
+        communityResults = await _priceRepository.searchCommunityPrices(
           trimmed,
           _currentPosition?.latitude,
           _currentPosition?.longitude,
         );
         communityCount = communityResults.length;
       } else {
-        communityCount = await _supabaseService.countCommunityPrices(
+        communityCount = await _priceRepository.countCommunityPrices(
           trimmed,
           _currentPosition?.latitude,
           _currentPosition?.longitude,
@@ -386,9 +389,8 @@ class _CatalogTabState extends ConsumerState<CatalogTab> {
           ),
         ),
         ..._searchResults.map((record) {
-          final unitPrice = _computeUnitPrice(record);
-          final name =
-              (record['product_name'] as String?)?.trim().toLowerCase() ?? '';
+          final unitPrice = _effectiveUnitPrice(record);
+          final name = record.productName.trim().toLowerCase();
           final minForName = minUnitPriceByName[name];
           final isCheapest = unitPrice != null &&
               minForName != null &&
@@ -604,24 +606,22 @@ class _CatalogTabState extends ConsumerState<CatalogTab> {
     );
   }
 
-  double? _computeUnitPrice(Map<String, dynamic> record) {
-    final explicit = (record['unit_price'] as num?)?.toDouble();
-    if (explicit != null) return explicit;
-    final price = (record['price'] as num?)?.toDouble();
-    final quantity = (record['quantity'] as num?)?.toDouble() ?? 1;
-    if (price == null) return null;
-    return price / (quantity <= 0 ? 1 : quantity);
+  double? _effectiveUnitPrice(PriceRecordModel record) {
+    return record.effectiveUnitPrice ??
+        _priceCalculator.unitPrice(
+          price: record.price,
+          quantity: record.quantity,
+        );
   }
 
   Map<String, double> _findMinUnitPriceByName(
-    List<Map<String, dynamic>> records,
+    List<PriceRecordModel> records,
   ) {
     final map = <String, double>{};
     for (final record in records) {
-      final unitPrice = _computeUnitPrice(record);
+      final unitPrice = _effectiveUnitPrice(record);
       if (unitPrice == null) continue;
-      final name =
-          (record['product_name'] as String?)?.trim().toLowerCase() ?? '';
+      final name = record.productName.trim().toLowerCase();
       if (name.isEmpty) continue;
       final current = map[name];
       if (current == null || unitPrice < current) {

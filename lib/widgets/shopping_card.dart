@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../data/models/price_record_model.dart';
 import 'product_detail_sheet.dart';
 
 class ShoppingCard extends StatelessWidget {
@@ -12,24 +13,20 @@ class ShoppingCard extends StatelessWidget {
     this.isCheapestOverride,
   });
 
-  final Map<String, dynamic> record;
+  final PriceRecordModel record;
   final VoidCallback? onTap;
   final bool? isCheapestOverride;
 
   @override
   Widget build(BuildContext context) {
-    final productName = record['product_name'] as String? ?? '商品名不明';
-    final shopName = record['shop_name'] as String? ?? '店舗不明';
-    final price = (record['price'] as num?)?.toDouble();
-    final isBest = isCheapestOverride ?? record['is_best_price'] == true;
-    final confirmationCount =
-        (record['confirmation_count'] as num?)?.toInt() ?? 0;
-    final imageUrl = record['image_url'] as String?;
-    final createdAtRaw = record['created_at'] as String?;
-    DateTime? createdAt;
-    if (createdAtRaw != null) {
-      createdAt = DateTime.tryParse(createdAtRaw)?.toLocal();
-    }
+    final productName =
+        record.productName.isNotEmpty ? record.productName : '商品名不明';
+    final shopName = record.shopName ?? '店舗不明';
+    final price = record.price;
+    final isBest = isCheapestOverride ?? (record.isBestPrice ?? false);
+    final confirmationCount = record.confirmationCount ?? 0;
+    final imageUrl = record.imageUrl;
+    final createdAt = record.createdAt?.toLocal();
     final dateText = createdAt != null
         ? DateFormat('MM/dd (E)', 'ja_JP').format(createdAt)
         : '';

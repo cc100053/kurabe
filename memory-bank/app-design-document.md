@@ -13,3 +13,4 @@ Kurabe app design
 - Content rules: Keep strings in Japanese where present; categories fixed to 18-tag list (野菜, 果物, 精肉, 鮮魚, 惣菜, 卵, 乳製品, 豆腐・納豆・麺, パン, 米・穀物, 調味料, インスタント, 飲料, お酒, お菓子, 冷凍食品, 日用品, その他).
 - Error/recovery: Guest gating surfaces inline prompts; password reset handled via Supabase deep link and in-app dialog; paywall errors use friendly messages; location/Places failures fall back to manual shop entry and non-community views.
 - Paywall expectations: RevenueCat entitlement `カイログ Pro`; package identifiers expected by the custom UI: `monthly`, `quarterly`, `annual` (keep aligned with RC offerings). Non-Pro sees community counts; Pro sees full records.
+- Data integrity: Price saves flow through a typed `PriceRepository` (quantity as int, best-price and unit-price checks) backed by the existing Supabase schema; no backend schema changes required for this refactor step.

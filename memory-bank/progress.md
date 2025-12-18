@@ -23,3 +23,6 @@ Progress snapshot
 
 Step 1 status
 - Completed: centralized AppConfig injection (env keys for Supabase/RevenueCat/Gemini/Places), price history migrated to Riverpod provider, entry wiring updated to use ProviderScope overrides.
+
+Step 2 status
+- Completed: introduced PriceCalculator and typed price record model/mapper, added Supabase price remote data source + repository, and migrated capture/search/detail flows to use centralized best-price/unit-price deduplication (quantity stored as int to avoid Supabase insert errors).

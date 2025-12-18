@@ -49,6 +49,7 @@ erDiagram
 - `profiles`: Per-user subscription flag (`is_pro`) keyed to Supabase auth user. Self-owned RLS for select/insert/update.
 - `shopping_list_items`: Shopping list entries scoped to `user_id` (also used for anonymous sessions). Indexed on `(user_id, is_done, created_at)`.
 - Storage: Bucket `price_tags` allows public upload/read for receipt images (objects not shown in ERD).
+- No schema changes in refactor Step 2; `quantity` remains an int column and client sends integer values to avoid Postgrest coercion errors.
 
 ### Access policies (RLS/high level)
 - `price_records`: Insert open; select if `user_id = auth.uid()` or linked `profiles.is_pro`; update/delete only when `user_id = auth.uid()`.

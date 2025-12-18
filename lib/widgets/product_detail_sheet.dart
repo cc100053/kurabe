@@ -6,15 +6,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 
+import '../data/models/price_record_model.dart';
+import '../data/repositories/price_repository.dart';
+import '../domain/price/price_calculator.dart';
 import '../services/location_service.dart';
-import '../services/supabase_service.dart';
 import '../providers/subscription_provider.dart';
 import '../screens/paywall_screen.dart';
 
 class ProductDetailSheet extends ConsumerStatefulWidget {
   const ProductDetailSheet({super.key, required this.record});
 
-  final Map<String, dynamic> record;
+  final PriceRecordModel record;
 
   @override
   ConsumerState<ProductDetailSheet> createState() => _ProductDetailSheetState();
@@ -22,13 +24,14 @@ class ProductDetailSheet extends ConsumerStatefulWidget {
 
 class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
   static const int _communityRadiusMeters = 3000;
-  final SupabaseService _supabaseService = SupabaseService();
+  final PriceRepository _priceRepository = PriceRepository();
+  final PriceCalculator _priceCalculator = const PriceCalculator();
   final NumberFormat _priceFormat = NumberFormat.currency(
     symbol: '¥',
     decimalDigits: 0,
   );
 
-  Map<String, dynamic>? _communityBestPrice;
+  PriceRecordModel? _communityBestPrice;
   bool _isLoading = false;
   bool _locationUnavailable = false;
   String? _locationError;
@@ -40,7 +43,7 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
   @override
   void initState() {
     super.initState();
-    _isGuest = _supabaseService.isGuest;
+    _isGuest = _priceRepository.isGuest;
     if (_isGuest) return;
     final subState = ref.read(subscriptionProvider);
     if (subState.isPro) {
@@ -74,8 +77,8 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
   }
 
   Future<void> _fetchInsight({bool highAccuracy = false}) async {
-    final productName = (widget.record['product_name'] as String?)?.trim();
-    if (productName == null || productName.isEmpty) return;
+    final productName = widget.record.productName.trim();
+    if (productName.isEmpty) return;
 
     final stopwatch = Stopwatch()..start();
     debugPrint(
@@ -104,7 +107,7 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
         '⏱️ [インサイト] 位置取得: ${stopwatch.elapsedMilliseconds}ms',
       );
 
-      final result = await _supabaseService.getNearbyCheapest(
+      final result = await _priceRepository.getNearbyCheapest(
         productName: productName,
         lat: position.latitude,
         lng: position.longitude,
@@ -193,16 +196,17 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
   }
 
   Future<void> _fetchLockedPreview() async {
-    final productName = (widget.record['product_name'] as String?)?.trim();
-    final userPrice = (widget.record['price'] as num?)?.toDouble();
-    final userQuantity = (widget.record['quantity'] as num?)?.toDouble() ?? 1;
-    final userUnitPrice = _computeUnitPrice(userPrice, userQuantity);
-    if (productName == null || productName.isEmpty || userUnitPrice == null) {
+    final productName = widget.record.productName.trim();
+    final userUnitPrice = _priceCalculator.unitPrice(
+      price: widget.record.price,
+      quantity: widget.record.quantity,
+    );
+    if (productName.isEmpty || userUnitPrice == null) {
       return;
     }
     try {
       final position = await _obtainPosition();
-      final count = await _supabaseService.countCheaperCommunityPrices(
+      final count = await _priceRepository.countCheaperCommunityPrices(
         productName: productName,
         userUnitPrice: userUnitPrice,
         lat: position?.latitude,
@@ -222,9 +226,10 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final productName = widget.record['product_name'] as String? ?? '商品';
-    final imageUrl = widget.record['image_url'] as String?;
-    final userPrice = (widget.record['price'] as num?)?.toDouble();
+    final productName =
+        widget.record.productName.isNotEmpty ? widget.record.productName : '商品';
+    final imageUrl = widget.record.imageUrl;
+    final userPrice = widget.record.price;
 
     return Container(
       decoration: const BoxDecoration(
@@ -369,8 +374,8 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
   }
 
   Widget _buildYourRecordCard(double? userPrice) {
-    final shopName = widget.record['shop_name'] as String? ?? '店舗不明';
-    final createdAt = _parseDate(widget.record['created_at']);
+    final shopName = widget.record.shopName ?? '店舗不明';
+    final createdAt = widget.record.createdAt;
     final relative = createdAt != null ? _formatTimeAgo(createdAt) : '';
     final priceText = userPrice != null ? _priceFormat.format(userPrice) : '--';
 
@@ -503,20 +508,23 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
       );
     }
 
-    final communityPrice = (community['price'] as num?)?.toDouble();
-    final communityQuantity = (community['quantity'] as num?)?.toDouble() ?? 1;
-    final communityUnitPrice = (community['unit_price'] as num?)?.toDouble() ??
-        _computeUnitPrice(communityPrice, communityQuantity);
+    final communityPrice = community.price;
+    final communityUnitPrice = community.effectiveUnitPrice ??
+        _priceCalculator.unitPrice(
+          price: community.price,
+          quantity: community.quantity,
+        );
 
-    final userQuantity = (widget.record['quantity'] as num?)?.toDouble() ?? 1;
-    final userUnitPrice = _computeUnitPrice(userPrice, userQuantity);
-    final communityId = community['id'];
-    final userId = widget.record['id'];
+    final userUnitPrice = _priceCalculator.unitPrice(
+      price: userPrice,
+      quantity: widget.record.quantity,
+    );
+    final communityId = community.id;
+    final userId = widget.record.id;
 
-    final communityShop = community['shop_name'] as String?;
-    final communityDistance =
-        (community['distance_meters'] as num?)?.toDouble();
-    final communityDate = _parseDate(community['created_at']);
+    final communityShop = community.shopName ?? '店舗不明';
+    final communityDistance = community.distanceMeters;
+    final communityDate = community.createdAt;
 
     // Compare Unit Prices for accurate "Best Price" logic
     final sameRecord = communityId != null &&
@@ -535,14 +543,16 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
           communityDate != null ? _formatTimeAgo(communityDate) : null;
       if (relative != null) subtitleParts.add('$relativeに報告');
 
-      final unit = community['unit'] as String? ?? '';
-      final unitLabel = unit.isNotEmpty ? '/$unit' : '';
+      final unitLabel =
+          (community.unit ?? '').isNotEmpty ? '/${community.unit}' : '';
+      final priceText =
+          communityPrice != null ? _priceFormat.format(communityPrice) : '--';
 
       return _insightContainer(
         color: Colors.green.shade50,
         borderColor: Colors.green.shade200,
         title:
-            'より安い価格を発見！ ${_priceFormat.format(communityPrice)}${unitLabel.isNotEmpty ? unitLabel : ""}（$communityShop）',
+            'より安い価格を発見！ $priceText${unitLabel.isNotEmpty ? unitLabel : ""}（$communityShop）',
         icon: Icons.trending_down,
         subtitle: subtitleParts.isNotEmpty ? subtitleParts.join(' • ') : null,
       );
@@ -680,17 +690,5 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
     if (meters == null) return '';
     if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(1)} km';
     return '${meters.toStringAsFixed(0)} m';
-  }
-
-  DateTime? _parseDate(dynamic raw) {
-    if (raw is DateTime) return raw.toLocal();
-    if (raw is String) return DateTime.tryParse(raw)?.toLocal();
-    return null;
-  }
-
-  double? _computeUnitPrice(double? price, double quantity) {
-    if (price == null) return null;
-    final safeQty = quantity <= 0 ? 1 : quantity;
-    return price / safeQty;
   }
 }

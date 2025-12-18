@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import '../data/models/price_record_model.dart';
+import '../domain/price/price_calculator.dart';
 import '../main.dart';
 import 'product_detail_sheet.dart';
 
@@ -17,31 +19,31 @@ class CommunityProductTile extends StatelessWidget {
     this.isCheapestOverride,
   });
 
-  final Map<String, dynamic> record;
+  final PriceRecordModel record;
   final VoidCallback? onTap;
   final bool? isCheapestOverride;
+  static const PriceCalculator _calculator = PriceCalculator();
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
     // Extract data from record
-    final productName = record['product_name'] as String? ?? '商品名不明';
-    final shopName = record['shop_name'] as String? ?? '店舗不明';
-    final price = (record['price'] as num?)?.toInt();
-    final isCheapest = isCheapestOverride ?? record['is_best_price'] == true;
-    final confirmationCount =
-        (record['confirmation_count'] as num?)?.toInt() ?? 0;
-    final imageUrl = record['image_url'] as String?;
+    final productName = record.productName.isNotEmpty
+        ? record.productName
+        : '商品名不明';
+    final shopName = record.shopName ?? '店舗不明';
+    final price = record.price?.toInt();
+    final isCheapest =
+        isCheapestOverride ?? (record.isBestPrice ?? false);
+    final confirmationCount = record.confirmationCount ?? 0;
+    final imageUrl = record.imageUrl;
 
     // Calculate unit price
     final unitPrice = _calculateUnitPrice(record);
 
     // Check if tax is included
-    final taxIncludedValue = record['is_tax_included'];
-    final isTaxIncluded = taxIncludedValue is bool
-        ? taxIncludedValue
-        : (taxIncludedValue is num ? taxIncludedValue.toInt() == 1 : false);
+    final isTaxIncluded = record.isTaxIncluded ?? false;
 
     // Calculate time ago
     final timeAgo = _calculateTimeAgo(record);
@@ -417,32 +419,16 @@ class CommunityProductTile extends StatelessWidget {
     );
   }
 
-  String _calculateUnitPrice(Map<String, dynamic> record) {
-    final explicitUnitPrice = (record['unit_price'] as num?)?.toDouble();
-    final unit = (record['unit'] as String?) ?? '';
-
-    if (explicitUnitPrice != null) {
-      final unitLabel = unit.isNotEmpty ? unit : '単価';
-      return '(¥${explicitUnitPrice.toStringAsFixed(1)}/$unitLabel)';
-    }
-
-    final price = (record['price'] as num?)?.toDouble();
-    final quantity = (record['quantity'] as num?)?.toDouble() ?? 1;
-
-    if (price != null && quantity > 0) {
-      final unitPriceValue = price / quantity;
-      final unitLabel = unit.isNotEmpty ? unit : '単価';
-      return '(¥${unitPriceValue.toStringAsFixed(1)}/$unitLabel)';
-    }
-
-    return '';
+  String _calculateUnitPrice(PriceRecordModel record) {
+    final unitLabel = (record.unit ?? '').isNotEmpty ? record.unit! : '単価';
+    final unitPriceValue = record.effectiveUnitPrice ??
+        _calculator.unitPrice(price: record.price, quantity: record.quantity);
+    if (unitPriceValue == null) return '';
+    return '(¥${unitPriceValue.toStringAsFixed(1)}/$unitLabel)';
   }
 
-  String _calculateTimeAgo(Map<String, dynamic> record) {
-    final createdAtRaw = record['created_at'] as String?;
-    if (createdAtRaw == null) return '';
-
-    final createdAt = DateTime.tryParse(createdAtRaw)?.toLocal();
+  String _calculateTimeAgo(PriceRecordModel record) {
+    final createdAt = record.createdAt?.toLocal();
     if (createdAt == null) return '';
 
     final now = DateTime.now();

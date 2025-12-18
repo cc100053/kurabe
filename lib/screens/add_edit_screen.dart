@@ -13,11 +13,13 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../constants/categories.dart';
 import '../constants/category_visuals.dart';
 import '../data/config/app_config.dart';
+import '../data/models/price_record_model.dart';
+import '../data/repositories/price_repository.dart';
+import '../domain/price/price_calculator.dart';
 import '../main.dart';
 import '../services/gemini_service.dart';
 import '../services/location_service.dart';
 import '../services/google_places_service.dart';
-import '../services/supabase_service.dart';
 import 'smart_camera_screen.dart';
 
 enum _ImageAcquisitionOption { smartCamera, gallery }
@@ -50,7 +52,8 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
   final _shopFocusNode = FocusNode();
   late final GeminiService _geminiService;
   late final GooglePlacesService _placeService;
-  late final SupabaseService _supabaseService;
+  late final PriceRepository _priceRepository;
+  final PriceCalculator _priceCalculator = const PriceCalculator();
 
   bool _isTaxIncluded = false;
   double _taxRate = 0.10;
@@ -81,7 +84,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
     _placesApiKey = config.googlePlacesApiKey ?? '';
     _geminiService = GeminiService(apiKey: config.geminiApiKey);
     _placeService = GooglePlacesService();
-    _supabaseService = SupabaseService();
+    _priceRepository = PriceRepository();
     _productController.addListener(_onNameChanged);
     _hydratePrefetchedShops();
     _selectedCategory = 'その他';
@@ -489,7 +492,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
       setState(() => _suggestionChips = []);
       return;
     }
-    final suggestions = await _supabaseService.searchProductNames(
+    final suggestions = await _priceRepository.searchProductNames(
       normalizedQuery,
     );
     setState(() {
@@ -553,7 +556,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
         setState(() => _setInsightState(_InsightState.none));
         return;
       }
-      final cheapest = await _supabaseService.getNearbyCheapest(
+      final cheapest = await _priceRepository.getNearbyCheapest(
         productName: productName,
         lat: latLng.$1,
         lng: latLng.$2,
@@ -563,12 +566,10 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
         setState(() => _setInsightState(_InsightState.none));
         return;
       }
-      final price = (cheapest['price'] as num?)?.toDouble();
-      final quantity = (cheapest['quantity'] as num?)?.toDouble() ?? 1;
-      final nearbyUnitPrice =
-          price != null ? price / (quantity <= 0 ? 1 : quantity) : null;
-      final shop = cheapest['shop_name'] as String?;
-      final distance = (cheapest['distance_meters'] as num?)?.toDouble();
+      final price = cheapest.price;
+      final nearbyUnitPrice = cheapest.effectiveUnitPrice;
+      final shop = cheapest.shopName;
+      final distance = cheapest.distanceMeters;
 
       final currentUnitPrice = _currentComparableUnitPrice();
       // Treat as best only when strictly cheaper (ties are not flagged)
@@ -1480,8 +1481,10 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
     if (pricing == null) return null;
     final quantity = _parseQuantity();
     final taxedTotal = pricing.$3;
-    if (quantity <= 0) return null;
-    return taxedTotal / quantity;
+    return _priceCalculator.unitPrice(
+      price: taxedTotal,
+      quantity: quantity.toDouble(),
+    );
   }
 
   void _hideSavingDialog() {
@@ -1521,7 +1524,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
     try {
       String? imageUrl;
       if (_imageFile != null) {
-        imageUrl = await _supabaseService.uploadImage(_imageFile!);
+        imageUrl = await _priceRepository.uploadImage(_imageFile!);
       }
 
       final categoryToSave =
@@ -1529,22 +1532,24 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
               ? _selectedCategory!
               : 'その他');
 
-      await _supabaseService.saveRecord({
-        'product_name': normalizedProduct,
-        'price': finalTaxedTotal,
-        'original_price': originalPrice,
-        'quantity': quantity,
-        'price_type': _priceType,
-        'discount_type': _discountTypeToDb(_selectedDiscountType),
-        'discount_value': discountValue,
-        'is_tax_included': _isTaxIncluded,
-        'tax_rate': _taxRate,
-        'shop_name': shop,
-        'shop_lat': _selectedShopLat,
-        'shop_lng': _selectedShopLng,
-        'image_url': imageUrl,
-        'category_tag': categoryToSave,
-      });
+      final payload = PriceRecordPayload(
+        productName: normalizedProduct,
+        price: finalTaxedTotal,
+        originalPrice: originalPrice,
+        quantity: quantity,
+        priceType: _priceType,
+        discountType: _discountTypeToDb(_selectedDiscountType),
+        discountValue: discountValue,
+        isTaxIncluded: _isTaxIncluded,
+        taxRate: _taxRate,
+        shopName: shop,
+        shopLat: _selectedShopLat,
+        shopLng: _selectedShopLng,
+        imageUrl: imageUrl,
+        categoryTag: categoryToSave,
+      );
+
+      await _priceRepository.saveRecord(payload);
 
       if (!mounted) return;
       _hideSavingDialog();

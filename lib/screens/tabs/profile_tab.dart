@@ -9,9 +9,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../data/repositories/price_repository.dart';
 import '../../main.dart';
 import '../../constants/auth.dart';
-import '../../services/supabase_service.dart';
 import '../paywall_screen.dart';
 import '../../providers/subscription_provider.dart';
 
@@ -23,7 +23,7 @@ class ProfileTab extends ConsumerStatefulWidget {
 }
 
 class ProfileTabState extends ConsumerState<ProfileTab> {
-  final SupabaseService _supabaseService = SupabaseService();
+  final PriceRepository _priceRepository = PriceRepository();
   StreamSubscription<AuthState>? _authStateSub;
   OAuthProvider? _lastProvider;
   List<Map<String, dynamic>>? _pendingGuestRecords;
@@ -278,7 +278,7 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
   }
 
   Future<void> _captureGuestRecords() async {
-    if (!_supabaseService.isGuest) return;
+    if (!_priceRepository.isGuest) return;
     final guestUserId = Supabase.instance.client.auth.currentUser?.id;
     if (guestUserId == null) return;
     try {
@@ -307,7 +307,7 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
   @override
   Widget build(BuildContext context) {
     final user = Supabase.instance.client.auth.currentUser;
-    final isGuest = _supabaseService.isGuest;
+    final isGuest = _priceRepository.isGuest;
     final emailText = user?.email ?? 'ゲストユーザー';
     final isPro = ref.watch(subscriptionProvider).isPro;
 
@@ -495,7 +495,7 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
     return Column(
       children: [
         GestureDetector(
-          onTap: !_supabaseService.isGuest && !_isUpdatingProfile
+          onTap: !_priceRepository.isGuest && !_isUpdatingProfile
               ? _changeAvatar
               : null,
           child: Stack(
@@ -534,7 +534,7 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
               ),
 
               // Edit badge
-              if (!_supabaseService.isGuest)
+              if (!_priceRepository.isGuest)
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -997,7 +997,7 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
     setState(() => _isLoading = true);
     try {
       final auth = Supabase.instance.client.auth;
-      if (_supabaseService.isGuest) {
+      if (_priceRepository.isGuest) {
         await auth.linkIdentity(
           provider,
           redirectTo: supabaseRedirectUri,
