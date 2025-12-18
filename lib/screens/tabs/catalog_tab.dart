@@ -465,7 +465,7 @@ class _CatalogTabState extends ConsumerState<CatalogTab> {
                       MaterialPageRoute(builder: (_) => const PaywallScreen()),
                     );
                   },
-                  child: const Text('Unlock to see details'),
+                  child: const Text('詳細を見るにはロック解除'),
                 ),
               ],
             ),

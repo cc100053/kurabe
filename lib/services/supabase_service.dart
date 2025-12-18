@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -109,27 +110,34 @@ class SupabaseService {
   }) async {
     final user = _client.auth.currentUser;
     if (user?.isAnonymous ?? true) return null;
-    final result = await _client.rpc(
-      'get_nearby_cheapest',
-      params: {
-        'query_product_name': productName,
-        'user_lat': lat,
-        'user_lng': lng,
-        'search_radius_meters': radiusMeters,
-        'recent_days': recentDays,
-      },
-    );
+    try {
+      final result = await _client.rpc(
+        'get_nearby_cheapest',
+        params: {
+          'query_product_name': productName,
+          'user_lat': lat,
+          'user_lng': lng,
+          'search_radius_meters': radiusMeters,
+          'recent_days': recentDays,
+        },
+      );
 
-    if (result == null) return null;
-    if (result is List &&
-        result.isNotEmpty &&
-        result.first is Map<String, dynamic>) {
-      return Map<String, dynamic>.from(result.first as Map);
+      if (result == null) return null;
+      if (result is List &&
+          result.isNotEmpty &&
+          result.first is Map<String, dynamic>) {
+        return Map<String, dynamic>.from(result.first as Map);
+      }
+      if (result is Map<String, dynamic>) {
+        return result;
+      }
+      return null;
+    } catch (e, stack) {
+      debugPrint(
+          '[SupabaseService] getNearbyCheapest failed lat=$lat lng=$lng radius=$radiusMeters err=$e');
+      debugPrintStack(stackTrace: stack);
+      rethrow;
     }
-    if (result is Map<String, dynamic>) {
-      return result;
-    }
-    return null;
   }
 
   Future<List<String>> searchProductNames(String query, {int limit = 3}) async {

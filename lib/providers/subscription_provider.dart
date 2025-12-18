@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -102,6 +102,54 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final isPro = await _service.purchaseMonthly();
+      state = state.copyWith(isPro: isPro, isLoading: false, error: null);
+      return isPro;
+    } on PlatformException catch (e) {
+      final isCancelled = PurchasesErrorHelper.getErrorCode(e) ==
+          PurchasesErrorCode.purchaseCancelledError;
+      final message = isCancelled ? null : _friendlyError(e);
+      state = state.copyWith(
+        isLoading: false,
+        error: message,
+      );
+      return false;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: _friendlyError(e),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> purchasePlan(String packageId) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final isPro = await _service.purchasePackage(packageId);
+      state = state.copyWith(isPro: isPro, isLoading: false, error: null);
+      return isPro;
+    } on PlatformException catch (e) {
+      final isCancelled = PurchasesErrorHelper.getErrorCode(e) ==
+          PurchasesErrorCode.purchaseCancelledError;
+      final message = isCancelled ? null : _friendlyError(e);
+      state = state.copyWith(
+        isLoading: false,
+        error: message,
+      );
+      return false;
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: _friendlyError(e),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> showPaywall(BuildContext context) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final isPro = await _service.showRevenueCatPaywall(context);
       state = state.copyWith(isPro: isPro, isLoading: false, error: null);
       return isPro;
     } on PlatformException catch (e) {

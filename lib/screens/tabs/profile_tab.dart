@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,15 +13,16 @@ import '../../main.dart';
 import '../../constants/auth.dart';
 import '../../services/supabase_service.dart';
 import '../paywall_screen.dart';
+import '../../providers/subscription_provider.dart';
 
-class ProfileTab extends StatefulWidget {
+class ProfileTab extends ConsumerStatefulWidget {
   const ProfileTab({super.key});
 
   @override
-  State<ProfileTab> createState() => ProfileTabState();
+  ConsumerState<ProfileTab> createState() => ProfileTabState();
 }
 
-class ProfileTabState extends State<ProfileTab> {
+class ProfileTabState extends ConsumerState<ProfileTab> {
   final SupabaseService _supabaseService = SupabaseService();
   StreamSubscription<AuthState>? _authStateSub;
   OAuthProvider? _lastProvider;
@@ -307,6 +309,7 @@ class ProfileTabState extends State<ProfileTab> {
     final user = Supabase.instance.client.auth.currentUser;
     final isGuest = _supabaseService.isGuest;
     final emailText = user?.email ?? 'ゲストユーザー';
+    final isPro = ref.watch(subscriptionProvider).isPro;
 
     return Scaffold(
       backgroundColor: KurabeColors.background,
@@ -317,7 +320,7 @@ class ProfileTabState extends State<ProfileTab> {
           slivers: [
             // Premium header with gradient
             SliverToBoxAdapter(
-              child: _buildHeader(user, isGuest, emailText),
+              child: _buildHeader(user, isGuest, isPro, emailText),
             ),
 
             // Stats section
@@ -327,7 +330,7 @@ class ProfileTabState extends State<ProfileTab> {
 
             // Settings menu
             SliverToBoxAdapter(
-              child: _buildSettingsSection(isGuest),
+              child: _buildSettingsSection(isGuest, isPro),
             ),
 
             // Bottom spacing
@@ -338,7 +341,7 @@ class ProfileTabState extends State<ProfileTab> {
     );
   }
 
-  Widget _buildHeader(User? user, bool isGuest, String emailText) {
+  Widget _buildHeader(User? user, bool isGuest, bool isPro, String emailText) {
     final displayName = isGuest
         ? 'ゲストユーザー'
         : (user?.userMetadata?['name'] as String?) ?? emailText;
@@ -360,8 +363,22 @@ class ProfileTabState extends State<ProfileTab> {
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
           child: Column(
             children: [
-              // Avatar section
-              _buildAvatar(user),
+              // Avatar section with Pro badge
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _buildAvatar(user),
+                  if (!isGuest && isPro)
+                    Positioned(
+                      right: -15,
+                      top: -5,
+                      child: Transform.rotate(
+                        angle: 0.15, // slight tilt to right
+                        child: _buildProBadge(),
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: 20),
 
               // Name with edit button
@@ -423,6 +440,42 @@ class ProfileTabState extends State<ProfileTab> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildProBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(30),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            PhosphorIcons.crown(PhosphorIconsStyle.fill),
+            size: 14,
+            color: const Color(0xFFFFB800),
+          ),
+          const SizedBox(width: 4),
+          const Text(
+            'Pro',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFFFFB800),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -681,7 +734,7 @@ class ProfileTabState extends State<ProfileTab> {
     );
   }
 
-  Widget _buildSettingsSection(bool isGuest) {
+  Widget _buildSettingsSection(bool isGuest, bool isPro) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       child: Column(
@@ -755,18 +808,20 @@ class ProfileTabState extends State<ProfileTab> {
                     iconColor: KurabeColors.accent,
                   ),
                 ] else ...[
-                  _buildSettingsTile(
-                    icon: PhosphorIcons.crown(PhosphorIconsStyle.fill),
-                    title: 'Proにアップグレード',
-                    subtitle: 'コミュニティ価格を解放',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const PaywallScreen(),
+                  if (!isPro) ...[
+                    _buildSettingsTile(
+                      icon: PhosphorIcons.crown(PhosphorIconsStyle.fill),
+                      title: 'Proにアップグレード',
+                      subtitle: 'コミュニティ価格を解放',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const PaywallScreen(),
+                        ),
                       ),
+                      iconColor: KurabeColors.accent,
                     ),
-                    iconColor: KurabeColors.accent,
-                  ),
-                  _buildTileDivider(),
+                    _buildTileDivider(),
+                  ],
                   _buildSettingsTile(
                     icon: PhosphorIcons.signOut(PhosphorIconsStyle.fill),
                     title: 'ログアウト',

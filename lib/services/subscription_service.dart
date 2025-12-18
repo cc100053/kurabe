@@ -82,6 +82,10 @@ class SubscriptionService {
   }
 
   Future<bool> purchaseMonthly() async {
+    return purchasePackage('monthly');
+  }
+
+  Future<bool> purchasePackage(String packageId) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) {
       throw Exception('ログイン後に購入してください。');
@@ -91,8 +95,31 @@ class SubscriptionService {
       if (!configured) throw Exception('RevenueCat を初期化できませんでした。');
     }
     final offerings = await Purchases.getOfferings();
-    final package =
-        offerings.current?.monthly ?? offerings.current?.availablePackages.first;
+    final available = offerings.current?.availablePackages ?? [];
+    // Try matching by identifier, then by packageType name, then fall back to monthly/first.
+    Package? package;
+    try {
+      package = available.firstWhere(
+        (p) =>
+            p.identifier == packageId ||
+            p.packageType.name.toLowerCase() == packageId.toLowerCase(),
+      );
+    } catch (_) {
+      package = null;
+    }
+    if (package == null) {
+      try {
+        package = available.firstWhere(
+          (p) => p.packageType == PackageType.monthly,
+        );
+      } catch (_) {
+        package = null;
+      }
+    }
+    if (package == null && available.isNotEmpty) {
+      package = available.first;
+    }
+    package ??= offerings.current?.monthly;
     if (package == null) throw Exception('購入可能なプランが見つかりません。');
     final result = await Purchases.purchase(
       PurchaseParams.package(package),

@@ -4,7 +4,6 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../main.dart';
 import '../providers/subscription_provider.dart';
-import '../services/subscription_service.dart';
 
 class PaywallScreen extends ConsumerStatefulWidget {
   const PaywallScreen({super.key});
@@ -17,6 +16,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
     with SingleTickerProviderStateMixin {
   ProviderSubscription<SubscriptionState>? _sub;
   int _selectedPlanIndex = 1;
+  static const List<String> _packageIds = ['monthly', 'quarterly', 'annual'];
   late AnimationController _shimmerController;
 
   @override
@@ -683,6 +683,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
   }
 
   Widget _buildCTAButton(SubscriptionState subState, SubscriptionNotifier notifier) {
+    final packageId = _selectedPlanIndex >= 0 &&
+            _selectedPlanIndex < _packageIds.length
+        ? _packageIds[_selectedPlanIndex]
+        : _packageIds.first;
     return Container(
       width: double.infinity,
       height: 56,
@@ -705,7 +709,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
       child: ElevatedButton(
         onPressed: subState.isLoading || subState.isPro
             ? null
-            : () => notifier.purchase(),
+            : () => notifier.purchasePlan(packageId),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,

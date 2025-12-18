@@ -31,6 +31,7 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
   Map<String, dynamic>? _communityBestPrice;
   bool _isLoading = false;
   bool _locationUnavailable = false;
+  String? _locationError;
   late final bool _isGuest;
   Position? _currentPosition;
   int? _communityLockedCount;
@@ -84,6 +85,7 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
     setState(() {
       _isLoading = true;
       _locationUnavailable = false;
+      _locationError = null;
     });
     try {
       final position = await _obtainPosition(highAccuracy: highAccuracy);
@@ -93,6 +95,8 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
           _communityBestPrice = null;
           _isLoading = false;
           _locationUnavailable = true;
+          _locationError = _locationError ??
+              '位置情報が取得できませんでした。設定で位置情報をオンにしてください。';
         });
         return;
       }
@@ -108,6 +112,9 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
         recentDays: 7, // Cover "5 days ago" items safely
       );
       debugPrint(
+        '[インサイト] Supabase結果 lat=${position.latitude}, lng=${position.longitude} -> ${result != null ? 'hit' : 'empty'}',
+      );
+      debugPrint(
         '⏱️ [インサイト] APIレスポンス受信: ${stopwatch.elapsedMilliseconds}ms',
       );
       if (!mounted) return;
@@ -115,6 +122,7 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
         _communityBestPrice = result;
         _isLoading = false;
         _locationUnavailable = false;
+        _locationError = null;
       });
     } catch (_) {
       if (!mounted) return;
@@ -122,6 +130,7 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
         _communityBestPrice = null;
         _isLoading = false;
         _locationUnavailable = true;
+        _locationError ??= '再試行してください。';
       });
     }
   }
@@ -133,27 +142,54 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
     }
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
+      if (mounted) {
+        setState(() {
+          _locationError = '位置情報の許可が必要です。設定から許可してください。';
+        });
+      }
       return null;
     }
 
-    Position? position = _currentPosition ?? LocationService.instance.cachedPosition;
-    position ??= await Geolocator.getLastKnownPosition();
-    if (position == null) {
-      try {
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy:
-              highAccuracy ? LocationAccuracy.high : LocationAccuracy.low,
-          timeLimit:
-              highAccuracy ? const Duration(seconds: 8) : const Duration(seconds: 4),
-        );
-      } on TimeoutException {
-        position = null;
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) {
+        setState(() {
+          _locationError = '位置情報サービスをオンにしてください。';
+        });
       }
+      await Geolocator.openLocationSettings();
+      return null;
     }
-    if (position != null) {
-      _currentPosition = position;
+
+    try {
+      Position? position =
+          _currentPosition ?? LocationService.instance.cachedPosition;
+      position ??= await Geolocator.getLastKnownPosition();
+      if (position == null) {
+        try {
+          position = await Geolocator.getCurrentPosition(
+            desiredAccuracy:
+                highAccuracy ? LocationAccuracy.high : LocationAccuracy.low,
+            timeLimit:
+                highAccuracy ? const Duration(seconds: 10) : const Duration(seconds: 6),
+          );
+        } on TimeoutException {
+          position = null;
+        }
+      }
+      if (position != null) {
+        _currentPosition = position;
+        return position;
+      }
+    } catch (_) {
+      // Fall through to return null with error.
     }
-    return position;
+    if (mounted) {
+      setState(() {
+        _locationError = '現在地を取得できませんでした。電波状況を確認して再試行してください。';
+      });
+    }
+    return null;
   }
 
   Future<void> _fetchLockedPreview() async {
@@ -413,7 +449,7 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
             ),
             const SizedBox(height: 6),
             Text(
-              'タップして高精度で再試行します。',
+              _locationError ?? 'タップして高精度で再試行します。',
               style: TextStyle(color: Colors.grey.shade700),
             ),
             const SizedBox(height: 10),
@@ -571,7 +607,7 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
                 MaterialPageRoute(builder: (_) => const PaywallScreen()),
               );
             },
-            child: const Text('Unlock to see details'),
+            child: const Text('詳細を見るにはロック解除'),
           ),
         ],
       ),
