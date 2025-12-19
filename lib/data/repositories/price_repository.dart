@@ -36,7 +36,8 @@ class PriceRepository {
     );
 
     var isBestPrice = false;
-    if (productName.isNotEmpty &&
+    if (!isGuest &&
+        productName.isNotEmpty &&
         unitPrice != null &&
         payload.shopLat != null &&
         payload.shopLng != null) {
@@ -84,7 +85,10 @@ class PriceRepository {
   Future<List<String>> searchProductNames(String query, {int limit = 3}) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return [];
-    final raw = await _remote.searchProductNamesRaw(trimmed);
+    final raw = await _remote.searchProductNamesRaw(
+      trimmed,
+      limit: limit * 3,
+    );
     final names = <String>[];
     for (final item in raw) {
       String? name;
@@ -113,7 +117,6 @@ class PriceRepository {
     double? lng, {
     int limit = 20,
   }) async {
-    if (isGuest) return [];
     final raw = await _remote.searchCommunityPricesRaw(
       query,
       lat,
@@ -138,13 +141,23 @@ class PriceRepository {
     double? lng, {
     int limit = 20,
   }) async {
-    final results = await searchCommunityPrices(
-      query,
-      lat,
-      lng,
-      limit: limit,
+    final locLat = lat ?? 0;
+    final locLng = lng ?? 0;
+    if (lat == null || lng == null) {
+      final results = await searchCommunityPrices(
+        query,
+        lat,
+        lng,
+        limit: limit,
+      );
+      return results.length;
+    }
+    return _remote.countNearbyCommunityPricesRaw(
+      query: query,
+      lat: locLat,
+      lng: locLng,
+      radiusMeters: 3000,
     );
-    return results.length;
   }
 
   Future<int> countCheaperCommunityPrices({

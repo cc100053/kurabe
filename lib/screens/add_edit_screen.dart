@@ -17,10 +17,13 @@ import '../data/models/price_record_model.dart';
 import '../data/repositories/price_repository.dart';
 import '../domain/price/price_calculator.dart';
 import '../main.dart';
+import '../providers/subscription_provider.dart';
 import '../services/gemini_service.dart';
 import '../services/location_service.dart';
 import '../services/google_places_service.dart';
 import 'smart_camera_screen.dart';
+import 'paywall_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum _ImageAcquisitionOption { smartCamera, gallery }
 
@@ -76,6 +79,8 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
   double? _finalTaxedTotal;
   bool _isSearchingShopPredictions = false;
   Timer? _shopSearchDebounce;
+  bool _isPro = false;
+  String? _gatedInsightMessage;
 
   @override
   void initState() {
@@ -92,6 +97,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
     _taxRate = 0.10;
     _applyCategoryTax(_selectedCategory);
     _calculateFinalPrice();
+    _isPro = ref.read(subscriptionProvider).isPro;
   }
 
   @override
@@ -200,6 +206,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
       _isAnalyzingImage = true;
       _setInsightState(_InsightState.idle);
       _suggestionChips = [];
+      _gatedInsightMessage = null;
     });
     _calculateFinalPrice();
     File imageToSend = file;
@@ -487,25 +494,62 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
   }
 
   Future<void> _fetchSuggestions(String query) async {
-    final normalizedQuery = _normalizeName(query);
-    if (normalizedQuery.isEmpty) {
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty) {
       setState(() => _suggestionChips = []);
       return;
     }
+    final normalizedQuery = _normalizeName(trimmedQuery);
+    // Ensure we have a Supabase session for RPCs (guest is fine).
+    final auth = Supabase.instance.client.auth;
+    if (auth.currentUser == null) {
+      try {
+        await auth.signInAnonymously();
+      } catch (_) {}
+    }
+
     final suggestions = await _priceRepository.searchProductNames(
-      normalizedQuery,
+      trimmedQuery,
     );
-    setState(() {
-      final display = <String>[];
-      for (final s in suggestions) {
-        if (_normalizeName(s).toLowerCase() == normalizedQuery.toLowerCase()) {
-          continue;
-        }
-        display.add(s);
-        if (display.length >= 3) break;
+    final display = <String>[];
+    for (final s in suggestions) {
+      if (_normalizeName(s).toLowerCase() == normalizedQuery.toLowerCase()) {
+        continue;
       }
-      _suggestionChips = display;
-    });
+      display.add(s);
+      if (display.length >= 3) break;
+    }
+
+    // If no hits and not Pro, try community search to surface names without details.
+    if (display.isEmpty && !_isPro && _placesApiKey.isNotEmpty) {
+      try {
+        final coords = LocationService.instance.getFreshLatLng() ??
+            await LocationService.instance.ensureLocation(
+              apiKey: _placesApiKey,
+            );
+        if (coords != null) {
+          final community = await _priceRepository.searchCommunityPrices(
+            normalizedQuery,
+            coords.$1,
+            coords.$2,
+            limit: 5,
+          );
+          for (final record in community) {
+            final name = record.productName.trim();
+            if (name.isEmpty) continue;
+            if (_normalizeName(name).toLowerCase() ==
+                normalizedQuery.toLowerCase()) continue;
+            if (display.contains(name)) continue;
+            display.add(name);
+            if (display.length >= 3) break;
+          }
+        }
+      } catch (_) {
+        // ignore and keep display empty
+      }
+    }
+
+    setState(() => _suggestionChips = display);
   }
 
   void _onNameChanged() {
@@ -538,14 +582,27 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
   }
 
   Future<void> _fetchCommunityInsight() async {
-    final productName = _productController.text.trim();
+    final rawProductName = _productController.text.trim();
+    final productName = _normalizeName(rawProductName);
     if (productName.isEmpty) {
-      setState(() => _setInsightState(_InsightState.idle));
+      setState(() {
+        _gatedInsightMessage = null;
+        _setInsightState(_InsightState.idle);
+      });
       return;
     }
     if (_placesApiKey.isEmpty) {
       return;
     }
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      setState(() {
+        _gatedInsightMessage = 'ログインすると周辺の価格を比較できます。';
+        _setInsightState(_InsightState.none);
+      });
+      return;
+    }
+    _isPro = ref.read(subscriptionProvider).isPro;
 
     setState(() => _setInsightState(_InsightState.loading));
     try {
@@ -553,9 +610,15 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
         apiKey: _placesApiKey,
       );
       if (latLng == null) {
-        setState(() => _setInsightState(_InsightState.none));
+        setState(() {
+          _gatedInsightMessage = null;
+          _setInsightState(_InsightState.none);
+        });
         return;
       }
+      _gatedInsightMessage = null;
+      final currentUnitPrice = _currentComparableUnitPrice();
+
       final cheapest = await _priceRepository.getNearbyCheapest(
         productName: productName,
         lat: latLng.$1,
@@ -563,31 +626,82 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
         radiusMeters: _insightRadiusMeters,
       );
       if (cheapest == null) {
-        setState(() => _setInsightState(_InsightState.none));
+        // For non-Pro, try counts to avoid leaking details.
+        if (!_isPro) {
+          final count = await _priceRepository.countCommunityPrices(
+            productName,
+            latLng.$1,
+            latLng.$2,
+            limit: 3,
+          );
+          if (count > 0) {
+        setState(() {
+          _gatedInsightMessage = '周辺に記録があります。Proで店舗と価格を表示。';
+          _setInsightState(
+            _InsightState.found,
+            price: null,
+            shop: null,
+            distanceMeters: null,
+          );
+        });
         return;
       }
-      final price = cheapest.price;
+        }
+        setState(() {
+          _gatedInsightMessage = null;
+          _setInsightState(_InsightState.none);
+        });
+        return;
+      }
       final nearbyUnitPrice = cheapest.effectiveUnitPrice;
-      final shop = cheapest.shopName;
-      final distance = cheapest.distanceMeters;
+      if (currentUnitPrice == null || nearbyUnitPrice == null) {
+        setState(() {
+          _gatedInsightMessage = _isPro
+              ? null
+              : '周辺に記録があります。Proで店舗と価格を表示。';
+          _setInsightState(
+            _InsightState.none,
+            price: null,
+            shop: null,
+            distanceMeters: null,
+          );
+        });
+        return;
+      }
+      final isBest = _priceCalculator.isBetterOrEqualUnitPrice(
+        candidate: currentUnitPrice,
+        comparison: nearbyUnitPrice,
+      );
 
-      final currentUnitPrice = _currentComparableUnitPrice();
-      // Treat as best only when strictly cheaper (ties are not flagged)
-      final isBest = currentUnitPrice != null && nearbyUnitPrice != null
-          ? currentUnitPrice < (nearbyUnitPrice - 0.01)
-          : false;
-      setState(() {
-        _setInsightState(
-          isBest ? _InsightState.best : _InsightState.found,
-          price: price,
-          shop: shop,
-          distanceMeters: distance,
-        );
-      });
+      if (_isPro) {
+        setState(() {
+          _setInsightState(
+            isBest ? _InsightState.best : _InsightState.found,
+            price: cheapest.price,
+            shop: cheapest.shopName,
+            distanceMeters: cheapest.distanceMeters,
+          );
+        });
+      } else {
+        setState(() {
+          _gatedInsightMessage = isBest
+              ? '周辺最安値です。Proで詳細を確認。'
+              : '周辺に安い店舗があります。Proで店舗と価格を表示。';
+          _setInsightState(
+            isBest ? _InsightState.best : _InsightState.found,
+            price: null,
+            shop: null,
+            distanceMeters: null,
+          );
+        });
+      }
     } catch (e, stack) {
       debugPrint('コミュニティインサイト取得に失敗しました: $e');
       debugPrintStack(stackTrace: stack);
-      setState(() => _setInsightState(_InsightState.none));
+      setState(() {
+        _gatedInsightMessage = null;
+        _setInsightState(_InsightState.none);
+      });
     }
   }
 
@@ -1268,88 +1382,146 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
   }
 
   Widget _buildInsightCard() {
-    if (_insightState == _InsightState.idle) return const SizedBox.shrink();
+    IconData icon = Icons.travel_explore;
+    Color iconColor = KurabeColors.textSecondary;
+    Color bgColor = KurabeColors.divider;
+    String title = '周辺の価格をチェックしよう';
+    String? subtitle = '商品名と価格を入力すると比較が表示されます。';
 
-    IconData icon;
-    Color iconColor;
-    Color bgColor;
-    String title;
-    String? subtitle;
-
-    if (_insightState == _InsightState.loading) {
-      icon = Icons.search;
-      iconColor = KurabeColors.textTertiary;
-      bgColor = KurabeColors.divider;
-      title = '周辺の価格を検索中...';
-    } else if (_insightState == _InsightState.none) {
-      icon = Icons.add_circle_outline;
-      iconColor = KurabeColors.primary;
-      bgColor = KurabeColors.primary.withAlpha(20);
-      title = '周辺に記録なし';
-      subtitle = 'この商品の最初の投稿者になろう！';
-    } else if (_insightState == _InsightState.best) {
-      icon = Icons.emoji_events;
-      iconColor = Colors.amber.shade700;
-      bgColor = Colors.amber.shade100;
-      title = '周辺最安値！';
-      if (_insightPrice != null && _insightShop != null) {
-        final distance = _insightDistanceMeters != null
-            ? _formatDistance(_insightDistanceMeters!)
-            : '';
-        subtitle = '次点: $_insightShop ¥${_insightPrice!.round()} $distance';
-      }
-    } else {
-      // _InsightState.found - there's a cheaper price nearby
-      icon = Icons.local_offer;
-      iconColor = KurabeColors.success;
-      bgColor = KurabeColors.success.withAlpha(20);
-      final priceText =
-          _insightPrice != null ? '¥${_insightPrice!.round()}' : '';
-      final shopText = _insightShop ?? '';
-      final distance = _insightDistanceMeters != null
-          ? _formatDistance(_insightDistanceMeters!)
-          : '';
-      title = 'より安い店舗あり';
-      subtitle = '$shopText $priceText $distance'.trim();
+    switch (_insightState) {
+      case _InsightState.loading:
+        icon = Icons.search;
+        iconColor = KurabeColors.textTertiary;
+        bgColor = KurabeColors.divider;
+        title = '周辺の価格を検索中...';
+        subtitle = '少々お待ちください。';
+        break;
+      case _InsightState.none:
+        icon = Icons.add_circle_outline;
+        iconColor = KurabeColors.primary;
+        bgColor = KurabeColors.primary.withAlpha(20);
+        title = '周辺に記録なし';
+        subtitle = 'この商品の最初の投稿者になろう！';
+        break;
+      case _InsightState.best:
+        icon = Icons.emoji_events;
+        iconColor = Colors.amber.shade700;
+        bgColor = Colors.amber.shade100;
+        title = '周辺最安値！';
+        if (_gatedInsightMessage != null) {
+          subtitle = _gatedInsightMessage;
+        } else if (_insightPrice != null && _insightShop != null) {
+          final distance = _insightDistanceMeters != null
+              ? _formatDistance(_insightDistanceMeters!)
+              : '';
+          subtitle = '次点: $_insightShop ¥${_insightPrice!.round()} $distance';
+        } else {
+          subtitle = '他の店舗よりも安い価格です。';
+        }
+        break;
+      case _InsightState.found:
+        icon = Icons.local_offer;
+        iconColor = KurabeColors.success;
+        bgColor = KurabeColors.success.withAlpha(20);
+        title = '周辺に似た記録があります';
+        if (_gatedInsightMessage != null) {
+          subtitle = _gatedInsightMessage;
+        } else if (_isPro) {
+          final priceText =
+              _insightPrice != null ? '¥${_insightPrice!.round()}' : '';
+          final shopText = _insightShop ?? '';
+          final distance = _insightDistanceMeters != null
+              ? _formatDistance(_insightDistanceMeters!)
+              : '';
+          subtitle = '$shopText $priceText $distance'.trim();
+        } else {
+          subtitle = 'Proにアップグレードして店舗と価格を確認しよう';
+        }
+        break;
+      case _InsightState.idle:
+        // keep defaults to avoid layout jump
+        break;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: iconColor),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: KurabeColors.textPrimary,
-                  ),
-                ),
-                if (subtitle != null)
+    final subtitleText = subtitle ?? ' ';
+    final showUpgradeButton = !_isPro && _insightState == _InsightState.found;
+
+    return SizedBox(
+      height: 86,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: iconColor),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
                   Text(
-                    subtitle,
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: KurabeColors.textPrimary,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitleText,
                     style: TextStyle(
                       fontSize: 12,
                       color: KurabeColors.textSecondary,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-              ],
+                ],
+              ),
             ),
+            if (showUpgradeButton) ...[
+              const SizedBox(width: 8),
+              _buildProUpsellButton(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProUpsellButton() {
+    return SizedBox(
+      height: 32,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          backgroundColor: KurabeColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-        ],
+        ),
+        onPressed: () async {
+          if (!mounted) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PaywallScreen()),
+          );
+        },
+        child: const Text(
+          'Proを始める',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ),
     );
   }

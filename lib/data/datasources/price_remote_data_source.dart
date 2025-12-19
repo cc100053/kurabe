@@ -68,7 +68,6 @@ class PriceRemoteDataSource {
     int radiusMeters = 2000,
     int recentDays = 5,
   }) async {
-    if (isGuest) return null;
     try {
       final result = await _client.rpc(
         'get_nearby_cheapest',
@@ -107,7 +106,6 @@ class PriceRemoteDataSource {
   }) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return [];
-    if (isGuest) return [];
 
     // Try RPC first (if location is available) to leverage distance sorting.
     if (lat != null && lng != null) {
@@ -244,7 +242,42 @@ class PriceRemoteDataSource {
     }
   }
 
-  Future<List<dynamic>> searchProductNamesRaw(String query) async {
+  Future<int> countNearbyCommunityPricesRaw({
+    required String query,
+    required double lat,
+    required double lng,
+    int radiusMeters = 3000,
+  }) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return 0;
+    try {
+      final result = await _client.rpc(
+        'count_nearby_community_prices',
+        params: {
+          'query_text': trimmed,
+          'user_lat': lat,
+          'user_lng': lng,
+          'search_radius_meters': radiusMeters,
+        },
+      );
+      if (result is int) return result;
+      if (result is num) return result.toInt();
+      if (result is Map && result['count'] is num) {
+        return (result['count'] as num).toInt();
+      }
+      return 0;
+    } catch (e, stack) {
+      debugPrint(
+          '[PriceRemoteDataSource] count_nearby_community_prices failed: $e');
+      debugPrintStack(stackTrace: stack);
+      return 0;
+    }
+  }
+
+  Future<List<dynamic>> searchProductNamesRaw(
+    String query, {
+    int limit = 10,
+  }) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return [];
     try {
@@ -252,10 +285,52 @@ class PriceRemoteDataSource {
         'search_products_fuzzy',
         params: {'query_text': trimmed},
       );
-      if (result is List) return result;
-      return [];
-    } catch (_) {
-      return [];
+      if (result is List && result.isNotEmpty) return result;
+    } on PostgrestException catch (e, stack) {
+      debugPrint(
+          '[PriceRemoteDataSource] search_products_fuzzy rpc failed: ${e.message}');
+      debugPrintStack(stackTrace: stack);
+    } catch (e, stack) {
+      debugPrint(
+          '[PriceRemoteDataSource] search_products_fuzzy rpc error: $e');
+      debugPrintStack(stackTrace: stack);
     }
+
+    // Fallback: use community search RPC (definer) to fetch names even for guests.
+    try {
+      final result = await _client.rpc(
+        'search_community_prices',
+        params: {
+          'query_text': trimmed,
+          'user_lat': 0,
+          'user_lng': 0,
+          'limit_results': limit,
+        },
+      );
+      if (result is List && result.isNotEmpty) return result;
+    } catch (e, stack) {
+      debugPrint(
+          '[PriceRemoteDataSource] search_community_prices fallback failed: $e');
+      debugPrintStack(stackTrace: stack);
+    }
+
+    try {
+      final List<dynamic> response = await _client
+          .from('price_records')
+          .select('product_name')
+          .ilike('product_name', '%$trimmed%')
+          .order('created_at', ascending: false)
+          .limit(limit);
+      if (response.isNotEmpty) return response;
+    } on PostgrestException catch (e, stack) {
+      debugPrint(
+          '[PriceRemoteDataSource] fallback product search failed: ${e.message}');
+      debugPrintStack(stackTrace: stack);
+    } catch (e, stack) {
+      debugPrint(
+          '[PriceRemoteDataSource] fallback product search error: $e');
+      debugPrintStack(stackTrace: stack);
+    }
+    return [];
   }
 }

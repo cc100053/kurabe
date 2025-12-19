@@ -1,7 +1,28 @@
-read the whole project 
-create a memory-bank folder in the project root directory.
-create the following files in memory-bank:
-app-design-document.md
-tech-stack.md
-progress.md
-architecture.md
+"如果用戶手動輸入店名（例如自己打字輸入「樓下雜貨舖」），而沒有任何地理座標 (lat/lng) 寫入資料庫，咁剛才嗰段 SQL 的這幾行就會直接將這筆資料過濾走 (Filter out)：
+
+SQL
+
+and pr.shop_lat is not null  -- ❌ 如果係 NULL，這行會踢走筆資料
+and pr.shop_lng is not null  -- ❌ 同上
+這意味著：這筆價格資料雖然儲存了，但它永遠不會出現在「附近最抵 (Nearby Cheapest)」的功能裡，因為系統根本不知道它在哪裡。
+
+解決方案：如何讓「手動輸入」也有地理位置？
+
+方案一：假設「用戶輸入價格時，人就在店內」 (推薦 ⭐⭐⭐)
+這是大部份記帳/格價 App 的做法。當用戶按「新增價格」時，直接抓取用戶手機當下的 GPS 位置，當作該店舖的位置。
+
+邏輯：
+
+用戶打開「新增價格」頁面。
+
+用戶手動輸入店名：「Aeon Supermarket」。
+
+你的 App 在背景呼叫 Geolocator.getCurrentPosition()。
+
+當用戶按 Save 時，將這個 當前座標 填入 shop_lat 和 shop_lng。
+
+優點： 不需要 Google Maps API（免費），邏輯簡單。
+
+缺點： 如果用戶是回到家才憑記憶輸入價格，那個位置就會變成用戶的家（這是一個可以接受的誤差，或者加個 Checkbox 給用戶選）。"
+
+幫我研究吓呢個方案嘅可行性同優缺點，適唔適合我呢個APP去使用？亦都要留意一下DB嘅欄位設定係咪合適？需唔需要加row？

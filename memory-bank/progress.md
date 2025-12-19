@@ -13,6 +13,7 @@ Progress snapshot
 - Database state
   - Tables: `price_records` (includes quantity, original_price, price_type, discount_type/value, tax_rate, user_id), `profiles` (is_pro), `shopping_list_items`.
   - Policies: price_records insert all; select own or Pro; update/delete own. Shopping list CRUD scoped to auth.uid (works for anonymous). Storage `price_tags` allows public upload/read. RPCs deployed as SQL functions.
+  - RPCs: `search_products_fuzzy` set to SECURITY DEFINER with anon/auth EXECUTE to allow guest name suggestions; `search_community_prices`/`count_nearby_community_prices` already definer.
 
 - Outstanding / next checks
   - Confirm `price_records.user_id` and `tax_rate` columns exist in all environments; backfill null tax_rate to 0.10 and rerun migrations as needed.
