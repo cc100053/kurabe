@@ -83,12 +83,42 @@ class PriceRepository {
   }
 
   Future<List<String>> searchProductNames(String query, {int limit = 3}) async {
-    final trimmed = query.trim();
-    if (trimmed.isEmpty) return [];
-    final raw = await _remote.searchProductNamesRaw(
-      trimmed,
-      limit: limit * 3,
-    );
+    final base = _normalizeQueryBase(query);
+    if (base.isEmpty) return [];
+
+    String _buildPrimary(String value) {
+      final noSpaces = value.replaceAll(' ', '');
+      if (noSpaces.length > 20) return noSpaces.substring(0, 20);
+      return noSpaces;
+    }
+
+    String? _fallbackSegment(String value) {
+      if (value.isEmpty) return null;
+      final parts = value.split(' ')..removeWhere((p) => p.isEmpty);
+      if (parts.isEmpty) return null;
+      parts.sort((a, b) => b.length.compareTo(a.length));
+      final longest = parts.first;
+      if (longest.length > 20) return longest.substring(0, 20);
+      return longest;
+    }
+
+    final primary = _buildPrimary(base);
+    if (primary.isEmpty) return [];
+
+    Future<List<dynamic>> _run(String q) {
+      return _remote.searchProductNamesRaw(
+        q,
+        limit: limit * 3,
+      );
+    }
+
+    var raw = await _run(primary);
+    if (raw.isEmpty) {
+      final fallback = _fallbackSegment(base);
+      if (fallback != null && fallback != primary) {
+        raw = await _run(fallback);
+      }
+    }
     final names = <String>[];
     for (final item in raw) {
       String? name;
@@ -203,6 +233,37 @@ class PriceRepository {
       radiusMeters: radiusMeters,
     );
     return raw.map(_mapper.fromMap).toList();
+  }
+
+  String _normalizeQueryBase(String raw) {
+    if (raw.isEmpty) return '';
+
+    String _toHalfWidth(String value) {
+      final buffer = StringBuffer();
+      for (final codePoint in value.runes) {
+        // Full-width space -> half-width space.
+        if (codePoint == 0x3000) {
+          buffer.writeCharCode(0x20);
+          continue;
+        }
+        // Full-width ASCII range to half-width.
+        if (codePoint >= 0xFF01 && codePoint <= 0xFF5E) {
+          buffer.writeCharCode(codePoint - 0xFEE0);
+          continue;
+        }
+        buffer.writeCharCode(codePoint);
+      }
+      return buffer.toString();
+    }
+
+    final half = _toHalfWidth(raw);
+    final lowered = half.toLowerCase();
+    final removedSymbols = lowered.replaceAll(
+      RegExp(r'[^\p{L}\p{N}\s]', unicode: true),
+      ' ',
+    );
+    final collapsed = removedSymbols.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return collapsed;
   }
 
   List<PriceRecordModel> _dedupeCommunityResults(

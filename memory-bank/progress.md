@@ -8,7 +8,7 @@ Progress snapshot
   - Subscriptions: RevenueCat configured with entitlement `カイログ Pro`, fallback API key, purchase/restore/paywall/Customer Center entry points; `profiles.is_pro` sync for RLS.
   - Shopping list: Japanese-only list UI with add/toggle/delete and swipe-to-delete; backend `shopping_list_items` with user-scoped RLS supports guests via anonymous uid.
   - UI/UX overhaul: premium teal/cream system, animated bottom nav + gradient FAB, glassmorphism category cards, rich empty/error states, product detail sheet with community chips.
-  - Places/shops: Nearby store fetch with custom filtering plus Autocomplete + Place Details to capture lat/lng; `LocationRepository` centralizes permission checks, caching, and nearby shop fetch for Add/Edit, Catalog search, Category detail, and product insight sheets.
+  - Places/shops: Nearby store fetch with custom filtering plus Autocomplete + Place Details to capture lat/lng; `LocationRepository` centralizes permission checks, caching, and nearby shop fetch for Add/Edit, Catalog search, Category detail, and product insight sheets. Manual shop names now best-effort attach current GPS coords on save so they participate in nearby cheapest results even without Places selection.
 
 - Database state
   - Tables: `price_records` (includes quantity, original_price, price_type, discount_type/value, tax_rate, user_id), `profiles` (is_pro), `shopping_list_items`.

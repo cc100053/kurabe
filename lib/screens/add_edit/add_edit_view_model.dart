@@ -8,6 +8,7 @@ import '../../domain/price/discount_type.dart';
 import '../../domain/usecases/analyze_price_tag_use_case.dart';
 import '../../domain/usecases/save_price_record_use_case.dart';
 import '../../services/google_places_service.dart';
+import '../../services/location_service.dart';
 import 'add_edit_providers.dart';
 import 'add_edit_state.dart';
 
@@ -161,6 +162,22 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
   Future<void> save() async {
     if (state.isSaving) return;
     final useCase = ref.read(savePriceRecordUseCaseProvider);
+    double? shopLat = state.selectedShopLat;
+    double? shopLng = state.selectedShopLng;
+    if (shopLat == null || shopLng == null) {
+      try {
+        final loc = await LocationRepository.instance.ensurePosition(
+          cacheMaxAge: const Duration(minutes: 5),
+        );
+        final pos = loc.position;
+        if (pos != null) {
+          shopLat = pos.latitude;
+          shopLng = pos.longitude;
+        }
+      } catch (_) {
+        // Best-effort; continue without location.
+      }
+    }
     state = state.copyWith(isSaving: true);
     try {
       await useCase(
@@ -176,8 +193,8 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
           priceType: state.priceType,
           category: state.category,
           imageFile: state.imageFile,
-          shopLat: state.selectedShopLat,
-          shopLng: state.selectedShopLng,
+          shopLat: shopLat,
+          shopLng: shopLng,
         ),
       );
     } finally {
