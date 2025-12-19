@@ -52,11 +52,11 @@ final nearbyShopsProvider =
     if (apiKey.isEmpty) return const <GooglePlace>[];
     var cancelled = false;
     ref.onDispose(() => cancelled = true);
-    await LocationService.instance.preFetchLocation(apiKey: apiKey);
+    final shops =
+        await LocationRepository.instance.fetchNearbyShops(apiKey: apiKey);
     if (cancelled) return const <GooglePlace>[];
-    final cached = LocationService.instance.getFreshCachedShops();
-    if (cached == null || cached.isEmpty) return const <GooglePlace>[];
-    return _prioritizeShops(cached);
+    if (shops.isEmpty) return const <GooglePlace>[];
+    return _prioritizeShops(shops);
   },
 );
 
@@ -78,8 +78,8 @@ final shopPredictionsProvider = AutoDisposeFutureProviderFamily<
     ref.onDispose(() => cancelled = true);
 
     final service = ref.watch(googlePlacesServiceProvider);
-    final coords = LocationService.instance.getFreshLatLng() ??
-        await LocationService.instance.ensureLocation(apiKey: request.apiKey);
+    final coords = LocationRepository.instance.getFreshLatLng() ??
+        await LocationRepository.instance.ensureLocation();
     if (cancelled) return const <PlaceAutocompletePrediction>[];
 
     final predictions = await service.autocomplete(
@@ -150,9 +150,9 @@ final communityInsightProvider =
 
     (double, double)? coords;
     try {
-      coords = LocationService.instance.getFreshLatLng() ??
-          await LocationService.instance
-              .ensureLocation(apiKey: request.apiKey)
+      coords = LocationRepository.instance.getFreshLatLng() ??
+          await LocationRepository.instance
+              .ensureLocation()
               .timeout(const Duration(seconds: 6));
     } on TimeoutException {
       return AddEditInsight.none;

@@ -5,112 +5,195 @@ import 'package:geolocator/geolocator.dart';
 
 import 'google_places_service.dart';
 
-class LocationService {
-  LocationService._();
+enum LocationFailureReason {
+  permissionDenied,
+  serviceDisabled,
+  timeout,
+  unavailable,
+}
 
-  static final LocationService instance = LocationService._();
+enum LocationSource { cache, lastKnown, current }
 
-  final GooglePlacesService _placesService = GooglePlacesService();
-  List<GooglePlace>? cachedShops;
-  DateTime? _fetchTime;
-  double? cachedLatitude;
-  double? cachedLongitude;
+class LocationFailure {
+  const LocationFailure(this.reason);
 
-  bool _isCacheFresh(Duration maxAge) {
-    if (_fetchTime == null) return false;
-    return DateTime.now().difference(_fetchTime!) < maxAge;
+  final LocationFailureReason reason;
+}
+
+class LocationResult {
+  const LocationResult.success({
+    required this.position,
+    required this.source,
+  }) : failure = null;
+
+  const LocationResult.failure(this.failure)
+      : position = null,
+        source = null;
+
+  final Position? position;
+  final LocationFailure? failure;
+  final LocationSource? source;
+
+  bool get hasLocation => position != null;
+}
+
+class LocationRepository {
+  LocationRepository._({GooglePlacesService? placesService})
+      : _placesService = placesService ?? GooglePlacesService();
+
+  static final LocationRepository instance = LocationRepository._();
+
+  final GooglePlacesService _placesService;
+  Position? _cachedPosition;
+  DateTime? _positionFetchedAt;
+  List<GooglePlace>? _cachedShops;
+  DateTime? _shopsFetchedAt;
+
+  bool _isFresh(DateTime? fetchedAt, Duration maxAge) {
+    if (fetchedAt == null) return false;
+    return DateTime.now().difference(fetchedAt) < maxAge;
   }
 
-  Position? get cachedPosition {
-    if (!_isCacheFresh(const Duration(minutes: 5))) return null;
-    if (cachedLatitude == null || cachedLongitude == null) return null;
-    return Position(
-      latitude: cachedLatitude!,
-      longitude: cachedLongitude!,
-      timestamp: _fetchTime!,
-      accuracy: 100,
-      altitude: 0,
-      heading: 0,
-      speed: 0,
-      speedAccuracy: 0,
-      altitudeAccuracy: 0,
-      headingAccuracy: 0,
-    );
+  Position? _getCachedPosition(Duration maxAge) {
+    if (!_isFresh(_positionFetchedAt, maxAge)) return null;
+    return _cachedPosition;
   }
+
+  Position? get cachedPosition =>
+      _getCachedPosition(const Duration(minutes: 5));
 
   (double, double)? getFreshLatLng({
     Duration maxAge = const Duration(minutes: 5),
   }) {
-    if (!_isCacheFresh(maxAge)) return null;
-    if (cachedLatitude == null || cachedLongitude == null) return null;
-    return (cachedLatitude!, cachedLongitude!);
+    final cached = _getCachedPosition(maxAge);
+    if (cached == null) return null;
+    return (cached.latitude, cached.longitude);
   }
 
   List<GooglePlace>? getFreshCachedShops({
     Duration maxAge = const Duration(minutes: 5),
   }) {
-    if (!_isCacheFresh(maxAge)) return null;
-    return cachedShops;
+    if (!_isFresh(_shopsFetchedAt, maxAge)) return null;
+    return _cachedShops;
   }
 
-  Future<void> preFetchLocation({
+  Future<LocationResult> ensurePosition({
+    bool highAccuracy = false,
+    Duration cacheMaxAge = const Duration(minutes: 5),
+    bool requestPermission = true,
+  }) async {
+    final cached = _getCachedPosition(cacheMaxAge);
+    if (cached != null) {
+      return LocationResult.success(
+        position: cached,
+        source: LocationSource.cache,
+      );
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied && requestPermission) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return const LocationResult.failure(
+        LocationFailure(LocationFailureReason.permissionDenied),
+      );
+    }
+
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return const LocationResult.failure(
+        LocationFailure(LocationFailureReason.serviceDisabled),
+      );
+    }
+
+    Position? position;
+    var usedLastKnown = false;
+    var timedOut = false;
+    try {
+      position = await Geolocator.getCurrentPosition(
+        desiredAccuracy:
+            highAccuracy ? LocationAccuracy.high : LocationAccuracy.low,
+      ).timeout(
+        highAccuracy ? const Duration(seconds: 10) : const Duration(seconds: 6),
+      );
+    } on TimeoutException {
+      position = null;
+      timedOut = true;
+    } catch (_) {
+      position = null;
+    }
+
+    if (position == null) {
+      try {
+        position = await Geolocator.getLastKnownPosition();
+        usedLastKnown = position != null;
+      } catch (_) {
+        position = null;
+      }
+    }
+
+    if (position == null) {
+      return LocationResult.failure(
+        LocationFailure(
+          timedOut
+              ? LocationFailureReason.timeout
+              : LocationFailureReason.unavailable,
+        ),
+      );
+    }
+
+    _cachedPosition = position;
+    _positionFetchedAt = DateTime.now();
+    return LocationResult.success(
+      position: position,
+      source: usedLastKnown ? LocationSource.lastKnown : LocationSource.current,
+    );
+  }
+
+  Future<(double, double)?> ensureLocation({
+    Duration cacheMaxAge = const Duration(minutes: 5),
+  }) async {
+    final result = await ensurePosition(cacheMaxAge: cacheMaxAge);
+    if (!result.hasLocation) return null;
+    final pos = result.position!;
+    return (pos.latitude, pos.longitude);
+  }
+
+  Future<List<GooglePlace>> preFetchLocation({
     required String apiKey,
     Duration cacheMaxAge = const Duration(minutes: 5),
     bool forceRefresh = false,
   }) async {
-    if (apiKey.isEmpty) return;
-    debugPrint(
-      '[LocationService] 事前取得開始 forceRefresh=$forceRefresh cacheFresh=${_isCacheFresh(cacheMaxAge)}',
+    return fetchNearbyShops(
+      apiKey: apiKey,
+      cacheMaxAge: cacheMaxAge,
+      forceRefresh: forceRefresh,
     );
-    if (forceRefresh) {
-      cachedShops = null;
-      cachedLatitude = null;
-      cachedLongitude = null;
-      _fetchTime = null;
-    }
+  }
+
+  Future<List<GooglePlace>> fetchNearbyShops({
+    required String apiKey,
+    Duration cacheMaxAge = const Duration(minutes: 5),
+    bool forceRefresh = false,
+  }) async {
+    if (apiKey.isEmpty) return const <GooglePlace>[];
     if (!forceRefresh &&
-        cachedShops != null &&
-        cachedShops!.isNotEmpty &&
-        _isCacheFresh(cacheMaxAge)) {
-      debugPrint(
-        '[LocationService] キャッシュ済み店舗を再利用 (${cachedShops!.length}件)',
-      );
-      return;
+        _cachedShops != null &&
+        _cachedShops!.isNotEmpty &&
+        _isFresh(_shopsFetchedAt, cacheMaxAge)) {
+      return _cachedShops!;
     }
 
+    final positionResult =
+        await ensurePosition(cacheMaxAge: cacheMaxAge, requestPermission: true);
+    if (!positionResult.hasLocation) {
+      return const <GooglePlace>[];
+    }
+
+    final position = positionResult.position!;
     try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        debugPrint('[LocationService] 位置情報の許可がありません: $permission');
-        return;
-      }
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        debugPrint('[LocationService] 位置情報サービスがオフです');
-        return;
-      }
-
-      Position? position;
-      try {
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.low,
-        ).timeout(const Duration(seconds: 8));
-      } on TimeoutException {
-        position = await Geolocator.getLastKnownPosition();
-      }
-      position ??= await Geolocator.getLastKnownPosition();
-      if (position == null) {
-        debugPrint('[LocationService] 位置を取得できません');
-        return;
-      }
-
-      debugPrint(
-        '[LocationService] 位置取得: ${position.latitude}, ${position.longitude}',
-      );
       final shops = await _placesService.searchNearby(
         apiKey: apiKey,
         latitude: position.latitude,
@@ -119,29 +202,31 @@ class LocationService {
         radiusMeters: 600,
         languageCode: 'ja',
       );
-
-      cachedShops = shops;
-      cachedLatitude = position.latitude;
-      cachedLongitude = position.longitude;
-      _fetchTime = DateTime.now();
-      debugPrint('[LocationService] 店舗候補を取得: ${shops.length}件');
+      _cachedShops = shops;
+      _shopsFetchedAt = DateTime.now();
+      return shops;
     } catch (e, stack) {
-      debugPrint('LocationServiceの事前取得に失敗: $e');
+      debugPrint('LocationRepository fetchNearbyShops failed: $e');
       debugPrintStack(stackTrace: stack);
+      return const <GooglePlace>[];
     }
   }
 
-  Future<(double, double)?> ensureLocation({
-    required String apiKey,
-    Duration cacheMaxAge = const Duration(minutes: 5),
-  }) async {
-    final cached = getFreshLatLng(maxAge: cacheMaxAge);
-    if (cached != null) return cached;
-    await preFetchLocation(
-      apiKey: apiKey,
-      cacheMaxAge: cacheMaxAge,
-      forceRefresh: true,
-    );
-    return getFreshLatLng(maxAge: cacheMaxAge);
+  String messageForFailure(LocationFailureReason? reason) {
+    switch (reason) {
+      case LocationFailureReason.permissionDenied:
+        return '位置情報の許可が必要です。設定からオンにしてください。';
+      case LocationFailureReason.serviceDisabled:
+        return '位置情報サービスをオンにしてください。';
+      case LocationFailureReason.timeout:
+        return '現在地の取得がタイムアウトしました。通信環境を確認してください。';
+      case LocationFailureReason.unavailable:
+      default:
+        return '現在地を取得できませんでした。電波状況を確認して再試行してください。';
+    }
+  }
+
+  Future<void> openLocationSettings() {
+    return Geolocator.openLocationSettings();
   }
 }

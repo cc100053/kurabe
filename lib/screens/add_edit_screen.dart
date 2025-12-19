@@ -329,11 +329,9 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
     if (_placesApiKey.isEmpty) return;
     setState(() => _isSearchingShopPredictions = true);
     try {
-      final cached = LocationService.instance.getFreshLatLng();
+      final cached = LocationRepository.instance.getFreshLatLng();
       (double, double)? coords = cached;
-      coords ??= await LocationService.instance.ensureLocation(
-        apiKey: _placesApiKey,
-      );
+      coords ??= await LocationRepository.instance.ensureLocation();
       final predictions = await _placeService.autocomplete(
         apiKey: _placesApiKey,
         input: query,
@@ -414,7 +412,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
   }
 
   Future<void> _hydratePrefetchedShops() async {
-    final cached = LocationService.instance.getFreshCachedShops();
+    final cached = LocationRepository.instance.getFreshCachedShops();
     if (cached != null && cached.isNotEmpty) {
       final sorted = _prioritizeShops(cached);
       setState(() {
@@ -428,9 +426,9 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
     }
     if (_placesApiKey.isEmpty) return;
     setState(() => _isFetchingShops = true);
-    await LocationService.instance.preFetchLocation(apiKey: _placesApiKey);
+    await LocationRepository.instance.preFetchLocation(apiKey: _placesApiKey);
     if (!mounted) return;
-    final fetched = LocationService.instance.getFreshCachedShops();
+    final fetched = LocationRepository.instance.getFreshCachedShops();
     if (fetched != null && fetched.isNotEmpty) {
       final sorted = _prioritizeShops(fetched);
       setState(() {
@@ -523,10 +521,8 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
     // If no hits and not Pro, try community search to surface names without details.
     if (display.isEmpty && !_isPro && _placesApiKey.isNotEmpty) {
       try {
-        final coords = LocationService.instance.getFreshLatLng() ??
-            await LocationService.instance.ensureLocation(
-              apiKey: _placesApiKey,
-            );
+        final coords = LocationRepository.instance.getFreshLatLng() ??
+            await LocationRepository.instance.ensureLocation();
         if (coords != null) {
           final community = await _priceRepository.searchCommunityPrices(
             normalizedQuery,
@@ -606,9 +602,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
 
     setState(() => _setInsightState(_InsightState.loading));
     try {
-      final latLng = await LocationService.instance.ensureLocation(
-        apiKey: _placesApiKey,
-      );
+      final latLng = await LocationRepository.instance.ensureLocation();
       if (latLng == null) {
         setState(() {
           _gatedInsightMessage = null;
@@ -1560,12 +1554,12 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
     }
 
     setState(() => _isFetchingShops = true);
-    await LocationService.instance.preFetchLocation(
+    await LocationRepository.instance.preFetchLocation(
       apiKey: _placesApiKey,
       forceRefresh: true,
     );
     if (!mounted) return;
-    final cached = LocationService.instance.getFreshCachedShops();
+    final cached = LocationRepository.instance.getFreshCachedShops();
     if (cached == null || cached.isEmpty) {
       setState(() {
         _isFetchingShops = false;

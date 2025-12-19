@@ -13,7 +13,7 @@ Kurabe 全域模組化與捕捉流程穩定化方案
 - # 分模組重構計劃
 - （完成✅）Step 1 基礎分層與狀態治理：建立 data/domain/presentation 分層；Riverpod `AsyncNotifier` 取代 `ChangeNotifier` `AppState`；Env/Key 注入集中化。
 - （完成✅）Step 2 價格與資料模型統一：抽出 `PriceCalculator`，建立 typed models/mapper，拆 `SupabaseService` 為 data source + repository，去重與最安値判定集中（數量以 int 上傳避免 Supabase insert 失敗）。
-- Step 3 位置・店舗取得統一：擴充 `location_service.dart` 為 LocationRepository，統一權限/快取/降級；Places 補全。
+- （完成✅）Step 3 位置・店舗取得統一：擴充 `location_service.dart` 為 LocationRepository，統一權限/快取/降級；Places 補全。
 - Step 4 捕捉畫面拆解：Add/Edit 拆為 ViewModel + 分段 Widgets；OCR/圧縮/Gemini 置於 use case；保存流程封裝為單步；Shop 補全與 Insight 改用 cancellable `FutureProvider`。
 - Step 5 Catalog/Timeline/Detail：改用 `StreamProvider`/共用 Tile，日期分組 helper，共用最小單價標記與 repository 快取。
 - Step 6 認證與訂閱：共用 `AuthErrorMapper` + `AppSnackbar`；`SubscriptionController` 整合購買/復元/Paywall；移除 RC 測試 key 依賴，缺鍵時友善提示。

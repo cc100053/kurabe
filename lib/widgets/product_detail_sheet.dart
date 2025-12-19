@@ -139,58 +139,23 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
   }
 
   Future<Position?> _obtainPosition({bool highAccuracy = false}) async {
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      if (mounted) {
-        setState(() {
-          _locationError = '位置情報の許可が必要です。設定から許可してください。';
-        });
-      }
-      return null;
-    }
-
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (mounted) {
-        setState(() {
-          _locationError = '位置情報サービスをオンにしてください。';
-        });
-      }
-      await Geolocator.openLocationSettings();
-      return null;
-    }
-
-    try {
-      Position? position =
-          _currentPosition ?? LocationService.instance.cachedPosition;
-      position ??= await Geolocator.getLastKnownPosition();
-      if (position == null) {
-        try {
-          position = await Geolocator.getCurrentPosition(
-            desiredAccuracy:
-                highAccuracy ? LocationAccuracy.high : LocationAccuracy.low,
-            timeLimit:
-                highAccuracy ? const Duration(seconds: 10) : const Duration(seconds: 6),
-          );
-        } on TimeoutException {
-          position = null;
-        }
-      }
-      if (position != null) {
-        _currentPosition = position;
-        return position;
-      }
-    } catch (_) {
-      // Fall through to return null with error.
+    final result = await LocationRepository.instance.ensurePosition(
+      highAccuracy: highAccuracy,
+      cacheMaxAge: const Duration(minutes: 5),
+    );
+    final position = result.position;
+    if (position != null) {
+      _currentPosition = position;
+      return position;
     }
     if (mounted) {
       setState(() {
-        _locationError = '現在地を取得できませんでした。電波状況を確認して再試行してください。';
+        _locationError = LocationRepository.instance
+            .messageForFailure(result.failure?.reason);
       });
+    }
+    if (result.failure?.reason == LocationFailureReason.serviceDisabled) {
+      await LocationRepository.instance.openLocationSettings();
     }
     return null;
   }

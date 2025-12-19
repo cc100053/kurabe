@@ -16,6 +16,7 @@ import '../../providers/subscription_provider.dart';
 import '../../screens/paywall_screen.dart';
 import '../../screens/category_detail_screen.dart';
 import '../../widgets/community_product_tile.dart';
+import '../../services/location_service.dart';
 
 class CatalogTab extends ConsumerStatefulWidget {
   const CatalogTab({super.key});
@@ -146,18 +147,13 @@ class _CatalogTabState extends ConsumerState<CatalogTab> {
 
   Future<Position?> _ensureLocation() async {
     if (_currentPosition != null) return _currentPosition;
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      return null;
-    }
-    final position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.medium,
+    final result = await LocationRepository.instance.ensurePosition(
+      cacheMaxAge: const Duration(minutes: 5),
     );
-    _currentPosition = position;
+    final position = result.position;
+    if (position != null) {
+      _currentPosition = position;
+    }
     return position;
   }
 

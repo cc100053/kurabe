@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../data/models/price_record_model.dart';
@@ -117,60 +116,23 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
       return <PriceRecordModel>[];
     }
 
-    final cachedLatLng = LocationService.instance.getFreshLatLng(
-      maxAge: const Duration(minutes: 5),
+    final locationResult = await LocationRepository.instance.ensurePosition(
+      cacheMaxAge: const Duration(minutes: 5),
     );
-    double? lat = cachedLatLng?.$1;
-    double? lng = cachedLatLng?.$2;
-
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
+    final position = locationResult.position;
+    if (position == null) {
       if (!mounted) return <PriceRecordModel>[];
-      setState(() => _locationError = '位置情報の許可が必要です');
-      return <PriceRecordModel>[];
-    }
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (!mounted) return <PriceRecordModel>[];
-      setState(() => _locationError = '位置情報サービスをオンにしてください');
-      return <PriceRecordModel>[];
-    }
-
-    Position? position;
-    if (lat == null || lng == null) {
-      try {
-        position = await Geolocator.getLastKnownPosition();
-      } catch (_) {
-        position = null;
-      }
-      position ??= await Geolocator.getLastKnownPosition();
-      if (position == null) {
-        try {
-          position = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.low,
-            timeLimit: const Duration(seconds: 6),
-          );
-        } catch (_) {
-          position = null;
-        }
-      }
-      if (position != null) {
-        lat = position.latitude;
-        lng = position.longitude;
-      }
-    }
-    if (lat == null || lng == null) {
-      if (!mounted) return <PriceRecordModel>[];
-      setState(() => _locationError = '現在地を取得できませんでした');
+      setState(
+        () => _locationError = LocationRepository.instance
+            .messageForFailure(locationResult.failure?.reason),
+      );
       return <PriceRecordModel>[];
     }
 
     if (!mounted) return <PriceRecordModel>[];
     setState(() => _locationError = null);
+    final lat = position.latitude;
+    final lng = position.longitude;
     final result = await _priceRepository.getNearbyRecordsByCategory(
       categoryTag: trimmed,
       lat: lat,
