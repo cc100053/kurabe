@@ -42,3 +42,6 @@ Step 6 status
 
 Step 7 status
 - Completed: Consolidated price record tiles into a shared card, extracted category card and add/edit insight/price summary widgets, and memoized the theme build to reduce rebuild work.
+
+Step 8 status
+- Completed: Removed unused YahooPlaceService dead code; deferred local SQLite deprecation pending further validation.
