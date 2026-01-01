@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
@@ -16,6 +14,7 @@ import '../../providers/subscription_provider.dart';
 import '../../screens/paywall_screen.dart';
 import '../../screens/category_detail_screen.dart';
 import '../../widgets/price_record_tile.dart';
+import '../../widgets/category_card.dart';
 import '../../services/location_service.dart';
 
 class CatalogTab extends ConsumerStatefulWidget {
@@ -495,107 +494,21 @@ class _CatalogTabState extends ConsumerState<CatalogTab> {
                   icon: PhosphorIcons.gridFour(PhosphorIconsStyle.fill),
                 );
 
-            return _buildCategoryCard(context, name, visual);
+            return CategoryCard(
+              name: name,
+              visual: visual,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => CategoryDetailScreen(categoryName: name),
+                  ),
+                );
+              },
+            );
           },
           childCount: kCategories.length,
         ),
       ),
     );
   }
-
-  Widget _buildCategoryCard(
-    BuildContext context,
-    String name,
-    CategoryVisual visual,
-  ) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => CategoryDetailScreen(categoryName: name),
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [visual.color, visual.gradientEnd],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: visual.gradientEnd.withAlpha(77),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withAlpha(102),
-                    Colors.white.withAlpha(26),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Icon container with glass effect
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(179),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(8),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: IconTheme(
-                      data: IconTheme.of(context).copyWith(
-                        weight: visual.weight ?? 400,
-                      ),
-                      child: Icon(
-                        visual.icon,
-                        size: 26,
-                        color: const Color(0xFF374151),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  // Label
-                  Text(
-                    name,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: Color(0xFF374151),
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
 }

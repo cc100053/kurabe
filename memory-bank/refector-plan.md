@@ -17,7 +17,7 @@ Kurabe 全域模組化與捕捉流程穩定化方案
 - （完成✅）Step 4 捕捉畫面拆解：Add/Edit 拆為 ViewModel + 分段 Widgets；OCR/圧縮/Gemini 置於 use case；保存流程封裝為單步；Shop 補全與 Insight 改用 cancellable `FutureProvider`。
 - （完成✅）Step 5 Catalog/Timeline/Detail：改用 `StreamProvider`/共用 Tile，日期分組 helper，共用最小單價標記與 repository 快取。
 - （完成✅）Step 6 認證與訂閱：共用 `AuthErrorMapper` + `AppSnackbar`；`SubscriptionController` 整合購買/復元/Paywall；移除 RC 測試 key 依賴，缺鍵時友善提示。
-- Step 7 UI 可重用性：合併 CommunityProductTile/ShoppingCard，抽出 Category 卡片/Price Summary/Insight 卡；Theme 構建 memoization 減少重建。
+- （完成✅）Step 7 UI 可重用性：合併 CommunityProductTile/ShoppingCard，抽出 Category 卡片/Price Summary/Insight 卡；Theme 構建 memoization 減少重建。
 - Step 8 清理與死碼：標記或移除未用的 `YahooPlaceService` 等；評估逐步下線本地 SQLite，改用 Supabase 歷史。
 - Step 9 測試與驗證：單元測試（稅/折扣/單價、去重/最安値、位置快取、訂閱錯誤映射）、Widget/Golden（Add/Edit 片段、共用 Tile）、整合測試（保存流程 stub）。
 

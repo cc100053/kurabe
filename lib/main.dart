@@ -92,12 +92,42 @@ class KurabeApp extends StatefulWidget {
 
 class _KurabeAppState extends State<KurabeApp> {
   bool _resetDialogOpen = false;
+  late final ThemeData _themeData;
+
+  @override
+  void initState() {
+    super.initState();
+    _themeData = _buildThemeData();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Build the text theme with Noto Sans JP
+    return MaterialApp(
+      title: 'Kurabe',
+      debugShowCheckedModeBanner: false,
+      theme: _themeData,
+      home: StreamBuilder<AuthState>(
+        stream: Supabase.instance.client.auth.onAuthStateChange,
+        builder: (context, snapshot) {
+          final authState = snapshot.data;
+          if (authState?.event == AuthChangeEvent.passwordRecovery &&
+              !_resetDialogOpen) {
+            _resetDialogOpen = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _showPasswordResetDialog(context);
+            });
+          }
+          final session = Supabase.instance.client.auth.currentSession;
+          if (session != null) return const MainScaffold();
+          return const WelcomeScreen();
+        },
+      ),
+    );
+  }
+
+  ThemeData _buildThemeData() {
     final baseTextTheme = GoogleFonts.notoSansJpTextTheme(
-      Theme.of(context).textTheme,
+      ThemeData.light().textTheme,
     );
 
     final textTheme = baseTextTheme.copyWith(
@@ -183,251 +213,228 @@ class _KurabeAppState extends State<KurabeApp> {
       ),
     );
 
-    return MaterialApp(
-      title: 'Kurabe',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
 
-        // Colors
-        scaffoldBackgroundColor: KurabeColors.background,
-        colorScheme: ColorScheme.light(
-          primary: KurabeColors.primary,
-          onPrimary: Colors.white,
-          primaryContainer: KurabeColors.primaryLight.withAlpha(51),
-          onPrimaryContainer: KurabeColors.primaryDark,
-          secondary: KurabeColors.accent,
-          onSecondary: Colors.white,
-          secondaryContainer: KurabeColors.accent.withAlpha(51),
-          onSecondaryContainer: KurabeColors.accent,
-          tertiary: KurabeColors.primaryLight,
-          surface: KurabeColors.surface,
-          onSurface: KurabeColors.textPrimary,
-          surfaceContainerHighest: KurabeColors.surfaceElevated,
-          outline: KurabeColors.border,
-          outlineVariant: KurabeColors.divider,
-          error: KurabeColors.error,
-          onError: Colors.white,
+      // Colors
+      scaffoldBackgroundColor: KurabeColors.background,
+      colorScheme: ColorScheme.light(
+        primary: KurabeColors.primary,
+        onPrimary: Colors.white,
+        primaryContainer: KurabeColors.primaryLight.withAlpha(51),
+        onPrimaryContainer: KurabeColors.primaryDark,
+        secondary: KurabeColors.accent,
+        onSecondary: Colors.white,
+        secondaryContainer: KurabeColors.accent.withAlpha(51),
+        onSecondaryContainer: KurabeColors.accent,
+        tertiary: KurabeColors.primaryLight,
+        surface: KurabeColors.surface,
+        onSurface: KurabeColors.textPrimary,
+        surfaceContainerHighest: KurabeColors.surfaceElevated,
+        outline: KurabeColors.border,
+        outlineVariant: KurabeColors.divider,
+        error: KurabeColors.error,
+        onError: Colors.white,
+      ),
+
+      // Typography
+      textTheme: textTheme,
+
+      // AppBar theme
+      appBarTheme: AppBarTheme(
+        backgroundColor: KurabeColors.background,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: true,
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
         ),
-
-        // Typography
-        textTheme: textTheme,
-
-        // AppBar theme
-        appBarTheme: AppBarTheme(
-          backgroundColor: KurabeColors.background,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          centerTitle: true,
-          systemOverlayStyle: SystemUiOverlayStyle.dark,
-          titleTextStyle: textTheme.titleLarge?.copyWith(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.3,
-          ),
-          iconTheme: const IconThemeData(
-            color: KurabeColors.textPrimary,
-            size: 24,
-          ),
+        iconTheme: const IconThemeData(
+          color: KurabeColors.textPrimary,
+          size: 24,
         ),
+      ),
 
-        // Card theme - elevated with soft shadows
-        cardTheme: CardThemeData(
-          color: KurabeColors.surfaceElevated,
+      // Card theme - elevated with soft shadows
+      cardTheme: CardThemeData(
+        color: KurabeColors.surfaceElevated,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 0),
+      ),
+
+      // Input decoration - neumorphic style
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: KurabeColors.surfaceElevated,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: KurabeColors.border, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: KurabeColors.primary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: KurabeColors.error, width: 1),
+        ),
+        hintStyle: textTheme.bodyMedium?.copyWith(
+          color: KurabeColors.textTertiary,
+        ),
+      ),
+
+      // Elevated button - gradient-ready with rounded corners
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: KurabeColors.primary,
+          foregroundColor: Colors.white,
           elevation: 0,
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(14),
           ),
-          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 0),
-        ),
-
-        // Input decoration - neumorphic style
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: KurabeColors.surfaceElevated,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide:
-                const BorderSide(color: KurabeColors.border, width: 1),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide:
-                const BorderSide(color: KurabeColors.primary, width: 2),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: KurabeColors.error, width: 1),
-          ),
-          hintStyle: textTheme.bodyMedium?.copyWith(
-            color: KurabeColors.textTertiary,
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
+          textStyle: textTheme.labelLarge?.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
           ),
         ),
+      ),
 
-        // Elevated button - gradient-ready with rounded corners
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: KurabeColors.primary,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
-            textStyle: textTheme.labelLarge?.copyWith(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-
-        // Text button
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: KurabeColors.primary,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            textStyle: textTheme.labelLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-
-        // Outlined button
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: KurabeColors.primary,
-            side: const BorderSide(color: KurabeColors.primary, width: 1.5),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
-            textStyle: textTheme.labelLarge?.copyWith(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-
-        // Floating action button
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: KurabeColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 4,
-          shape: CircleBorder(),
-        ),
-
-        // Bottom navigation bar
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: KurabeColors.surfaceElevated,
-          selectedItemColor: KurabeColors.primary,
-          unselectedItemColor: KurabeColors.textTertiary,
-          type: BottomNavigationBarType.fixed,
-          elevation: 0,
-        ),
-
-        // Chip theme
-        chipTheme: ChipThemeData(
-          backgroundColor: KurabeColors.divider,
-          labelStyle: textTheme.labelMedium,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          side: BorderSide.none,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        ),
-
-        // Dialog theme
-        dialogTheme: DialogThemeData(
-          backgroundColor: KurabeColors.surfaceElevated,
-          elevation: 8,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          titleTextStyle: textTheme.titleLarge,
-          contentTextStyle: textTheme.bodyMedium,
-        ),
-
-        // Bottom sheet theme
-        bottomSheetTheme: const BottomSheetThemeData(
-          backgroundColor: KurabeColors.surfaceElevated,
-          elevation: 8,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          showDragHandle: true,
-          dragHandleColor: KurabeColors.border,
-          dragHandleSize: Size(40, 4),
-        ),
-
-        // Divider theme
-        dividerTheme: const DividerThemeData(
-          color: KurabeColors.divider,
-          thickness: 1,
-          space: 1,
-        ),
-
-        // List tile theme
-        listTileTheme: ListTileThemeData(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          tileColor: Colors.transparent,
-          selectedTileColor: KurabeColors.primary.withAlpha(26),
-        ),
-
-        // Icon theme
-        iconTheme: const IconThemeData(
-          color: KurabeColors.textSecondary,
-          size: 24,
-        ),
-
-        // Progress indicator theme
-        progressIndicatorTheme: const ProgressIndicatorThemeData(
-          color: KurabeColors.primary,
-          linearTrackColor: KurabeColors.divider,
-          circularTrackColor: KurabeColors.divider,
-        ),
-
-        // Snackbar theme
-        snackBarTheme: SnackBarThemeData(
-          backgroundColor: KurabeColors.textPrimary,
-          contentTextStyle:
-              textTheme.bodyMedium?.copyWith(color: Colors.white),
+      // Text button
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: KurabeColors.primary,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          behavior: SnackBarBehavior.floating,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          textStyle: textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
-      home: StreamBuilder<AuthState>(
-        stream: Supabase.instance.client.auth.onAuthStateChange,
-        builder: (context, snapshot) {
-          final authState = snapshot.data;
-          if (authState?.event == AuthChangeEvent.passwordRecovery &&
-              !_resetDialogOpen) {
-            _resetDialogOpen = true;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) _showPasswordResetDialog(context);
-            });
-          }
-          final session = Supabase.instance.client.auth.currentSession;
-          if (session != null) return const MainScaffold();
-          return const WelcomeScreen();
-        },
+
+      // Outlined button
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: KurabeColors.primary,
+          side: const BorderSide(color: KurabeColors.primary, width: 1.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
+          textStyle: textTheme.labelLarge?.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+
+      // Floating action button
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: KurabeColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 4,
+        shape: CircleBorder(),
+      ),
+
+      // Bottom navigation bar
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: KurabeColors.surfaceElevated,
+        selectedItemColor: KurabeColors.primary,
+        unselectedItemColor: KurabeColors.textTertiary,
+        type: BottomNavigationBarType.fixed,
+        elevation: 0,
+      ),
+
+      // Chip theme
+      chipTheme: ChipThemeData(
+        backgroundColor: KurabeColors.divider,
+        labelStyle: textTheme.labelMedium,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        side: BorderSide.none,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+
+      // Dialog theme
+      dialogTheme: DialogThemeData(
+        backgroundColor: KurabeColors.surfaceElevated,
+        elevation: 8,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        titleTextStyle: textTheme.titleLarge,
+        contentTextStyle: textTheme.bodyMedium,
+      ),
+
+      // Bottom sheet theme
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: KurabeColors.surfaceElevated,
+        elevation: 8,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        showDragHandle: true,
+        dragHandleColor: KurabeColors.border,
+        dragHandleSize: Size(40, 4),
+      ),
+
+      // Divider theme
+      dividerTheme: const DividerThemeData(
+        color: KurabeColors.divider,
+        thickness: 1,
+        space: 1,
+      ),
+
+      // List tile theme
+      listTileTheme: ListTileThemeData(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        tileColor: Colors.transparent,
+        selectedTileColor: KurabeColors.primary.withAlpha(26),
+      ),
+
+      // Icon theme
+      iconTheme: const IconThemeData(
+        color: KurabeColors.textSecondary,
+        size: 24,
+      ),
+
+      // Progress indicator theme
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: KurabeColors.primary,
+        linearTrackColor: KurabeColors.divider,
+        circularTrackColor: KurabeColors.divider,
+      ),
+
+      // Snackbar theme
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: KurabeColors.textPrimary,
+        contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

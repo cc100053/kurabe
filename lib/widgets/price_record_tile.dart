@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/models/price_record_model.dart';
-import 'community_product_tile.dart';
+import 'price_record_card.dart';
 
 class PriceRecordTile extends StatelessWidget {
   const PriceRecordTile({
@@ -17,7 +17,7 @@ class PriceRecordTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CommunityProductTile(
+    return PriceRecordCard(
       record: record,
       onTap: onTap,
       isCheapestOverride: isCheapestOverride,

@@ -15,6 +15,8 @@ import '../../main.dart';
 import '../../providers/subscription_provider.dart';
 import '../../services/google_places_service.dart';
 import '../../services/location_service.dart';
+import '../../widgets/add_edit_insight_card.dart';
+import '../../widgets/price_summary_card.dart';
 import '../paywall_screen.dart';
 import '../smart_camera_screen.dart';
 import 'add_edit_providers.dart';
@@ -55,7 +57,6 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
     super.initState();
     _placesApiKey = ref.read(appConfigProvider).googlePlacesApiKey ?? '';
     _syncControllers(ref.read(addEditViewModelProvider));
-    _shopFocusNode.addListener(_onShopFocusChanged);
 
     _stateSubscription = ref.listenManual<AddEditState>(
       addEditViewModelProvider,
@@ -95,17 +96,11 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
     _quantityController.dispose();
     _discountValueController.dispose();
     _shopController.dispose();
-    _shopFocusNode.removeListener(_onShopFocusChanged);
     _shopFocusNode.dispose();
     _stateSubscription.close();
     _savingSubscription.close();
     _nearbyShopsSubscription.close();
     super.dispose();
-  }
-
-  void _onShopFocusChanged() {
-    if (!mounted) return;
-    setState(() {});
   }
 
   void _syncControllers(AddEditState state) {
@@ -405,12 +400,6 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
     final isPro = ref.watch(subscriptionProvider).isPro;
     final nearbyShopsAsync = ref.watch(nearbyShopsProvider(_placesApiKey));
 
-    final predictionRequest = ShopPredictionRequest(
-      query: state.shopName,
-      apiKey: _placesApiKey,
-    );
-    final predictionsAsync = ref.watch(shopPredictionsProvider(predictionRequest));
-
     final insightRequest = InsightRequest(
       productName: state.productName,
       finalTaxedTotal: state.finalTaxedTotal,
@@ -423,8 +412,6 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
         state.productName.trim().isNotEmpty &&
         state.finalTaxedTotal != null;
 
-    final showPredictions =
-        _shopFocusNode.hasFocus && state.shopName.trim().isNotEmpty;
     final isFetchingShops =
         nearbyShopsAsync.isLoading || _isRefreshingShops;
 
@@ -443,7 +430,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            _AddEditInsightCard(
+            AddEditInsightCard(
               insight: insightAsync.value ?? AddEditInsight.idle,
               isLoading: isInsightLoading,
               isPro: isPro,
@@ -546,7 +533,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            _AddEditPriceSummary(
+            PriceSummaryCard(
               finalTaxedTotal: state.finalTaxedTotal,
               unitPrice: state.unitPrice,
               quantity: _parseQuantity(state.quantity),
@@ -594,31 +581,6 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
                 ),
               ],
             ),
-            if (showPredictions) ...[
-              const SizedBox(height: 8),
-              _AddEditShopPredictionsList(
-                predictions: predictionsAsync.value ?? const [],
-                isLoading: predictionsAsync.isLoading,
-                formatDistance: _formatDistance,
-                onSelected: (prediction) async {
-                  viewModel.setShopName(prediction.primaryText);
-                  _shopFocusNode.unfocus();
-                  try {
-                    await viewModel.selectPrediction(
-                      prediction,
-                      _placesApiKey,
-                    );
-                  } catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('店舗の詳細取得に失敗しました。'),
-                      ),
-                    );
-                  }
-                },
-              ),
-            ],
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -918,171 +880,6 @@ class _AddEditImageCard extends StatelessWidget {
   }
 }
 
-class _AddEditInsightCard extends StatelessWidget {
-  const _AddEditInsightCard({
-    required this.insight,
-    required this.isLoading,
-    required this.isPro,
-    required this.onUpgradeTap,
-    required this.formatDistance,
-  });
-
-  final AddEditInsight insight;
-  final bool isLoading;
-  final bool isPro;
-  final VoidCallback onUpgradeTap;
-  final String Function(double) formatDistance;
-
-  @override
-  Widget build(BuildContext context) {
-    IconData icon = Icons.travel_explore;
-    Color iconColor = KurabeColors.textSecondary;
-    Color bgColor = KurabeColors.divider;
-    String title = '周辺の価格をチェックしよう';
-    String? subtitle = '商品名と価格を入力すると比較が表示されます。';
-
-    if (isLoading) {
-      icon = Icons.search;
-      iconColor = KurabeColors.textTertiary;
-      bgColor = KurabeColors.divider;
-      title = '周辺の価格を検索中...';
-      subtitle = '少々お待ちください。';
-    } else {
-      switch (insight.status) {
-        case InsightStatus.none:
-          icon = Icons.add_circle_outline;
-          iconColor = KurabeColors.primary;
-          bgColor = KurabeColors.primary.withAlpha(20);
-          title = '周辺に記録なし';
-          subtitle = 'この商品の最初の投稿者になろう！';
-          break;
-        case InsightStatus.best:
-          icon = Icons.emoji_events;
-          iconColor = Colors.amber.shade700;
-          bgColor = Colors.amber.shade100;
-          title = '周辺最安値！';
-          if (insight.gatedMessage != null) {
-            subtitle = insight.gatedMessage;
-          } else if (insight.price != null && insight.shop != null) {
-            final distance = insight.distanceMeters != null
-                ? formatDistance(insight.distanceMeters!)
-                : '';
-            subtitle = '次点: ${insight.shop} ¥${insight.price!.round()} $distance';
-          } else {
-            subtitle = '他の店舗よりも安い価格です。';
-          }
-          break;
-        case InsightStatus.found:
-          icon = Icons.local_offer;
-          iconColor = KurabeColors.success;
-          bgColor = KurabeColors.success.withAlpha(20);
-          title = '周辺に似た記録があります';
-          if (insight.gatedMessage != null) {
-            subtitle = insight.gatedMessage;
-          } else if (isPro) {
-            final priceText =
-                insight.price != null ? '¥${insight.price!.round()}' : '';
-            final shopText = insight.shop ?? '';
-            final distance = insight.distanceMeters != null
-                ? formatDistance(insight.distanceMeters!)
-                : '';
-            subtitle = '$shopText $priceText $distance'.trim();
-          } else {
-            subtitle = 'Proにアップグレードして店舗と価格を確認しよう';
-          }
-          break;
-        case InsightStatus.idle:
-          break;
-      }
-    }
-
-    final subtitleText = subtitle ?? ' ';
-    final showUpgradeButton =
-        !isPro && insight.status == InsightStatus.found && !isLoading;
-
-    return SizedBox(
-      height: 86,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: iconColor),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: KurabeColors.textPrimary,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitleText,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: KurabeColors.textSecondary,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            if (showUpgradeButton) ...[
-              const SizedBox(width: 8),
-              _AddEditProUpsellButton(onTap: onUpgradeTap),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AddEditProUpsellButton extends StatelessWidget {
-  const _AddEditProUpsellButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 32,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          backgroundColor: KurabeColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        onPressed: onTap,
-        child: const Text(
-          'Proを始める',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _AddEditSuggestionChips extends StatelessWidget {
   const _AddEditSuggestionChips({
     required this.suggestions,
@@ -1106,56 +903,6 @@ class _AddEditSuggestionChips extends StatelessWidget {
             ),
           )
           .toList(),
-    );
-  }
-}
-
-class _AddEditPriceSummary extends StatelessWidget {
-  const _AddEditPriceSummary({
-    required this.finalTaxedTotal,
-    required this.unitPrice,
-    required this.quantity,
-  });
-
-  final double? finalTaxedTotal;
-  final double? unitPrice;
-  final int quantity;
-
-  @override
-  Widget build(BuildContext context) {
-    if (finalTaxedTotal == null && unitPrice == null) {
-      return const SizedBox.shrink();
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: KurabeColors.primary.withAlpha(20),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          if (finalTaxedTotal != null) ...[
-            Text(
-              '税込 ¥${finalTaxedTotal!.toStringAsFixed(0)}',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: KurabeColors.primary,
-              ),
-            ),
-          ],
-          if (unitPrice != null && quantity > 1) ...[
-            const SizedBox(width: 12),
-            Text(
-              '(@¥${unitPrice!.toStringAsFixed(0)})',
-              style: const TextStyle(
-                fontSize: 13,
-                color: KurabeColors.textSecondary,
-              ),
-            ),
-          ],
-        ],
-      ),
     );
   }
 }
@@ -1759,240 +1506,6 @@ class _AddEditCategoryPicker extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _AddEditShopPredictionsList extends StatelessWidget {
-  const _AddEditShopPredictionsList({
-    required this.predictions,
-    required this.isLoading,
-    required this.formatDistance,
-    required this.onSelected,
-  });
-
-  final List<PlaceAutocompletePrediction> predictions;
-  final bool isLoading;
-  final String Function(double) formatDistance;
-  final ValueChanged<PlaceAutocompletePrediction> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final trimmed = predictions.take(6).toList();
-    if (trimmed.isEmpty && !isLoading) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: KurabeColors.surfaceElevated,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: KurabeColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(8),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  KurabeColors.primary.withAlpha(15),
-                  KurabeColors.primary.withAlpha(5),
-                ],
-              ),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: KurabeColors.primary.withAlpha(30),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.location_on_rounded,
-                    size: 16,
-                    color: KurabeColors.primary,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Text(
-                  '候補店舗',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: KurabeColors.textPrimary,
-                  ),
-                ),
-                const Spacer(),
-                if (isLoading)
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(KurabeColors.primary),
-                    ),
-                  )
-                else
-                  Text(
-                    '${trimmed.length}件',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: KurabeColors.textTertiary,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (trimmed.isNotEmpty)
-            ...trimmed.asMap().entries.map((entry) {
-              final index = entry.key;
-              final prediction = entry.value;
-              final isLast = index == trimmed.length - 1;
-              final subtitleParts = <String>[];
-              if (prediction.secondaryText != null &&
-                  prediction.secondaryText!.isNotEmpty) {
-                subtitleParts.add(prediction.secondaryText!);
-              }
-              final distanceText = prediction.distanceMeters != null
-                  ? formatDistance(prediction.distanceMeters!)
-                  : null;
-
-              Color distanceColor = KurabeColors.textTertiary;
-              Color distanceBgColor = KurabeColors.divider;
-              if (prediction.distanceMeters != null) {
-                if (prediction.distanceMeters! < 300) {
-                  distanceColor = KurabeColors.success;
-                  distanceBgColor = KurabeColors.success.withAlpha(20);
-                } else if (prediction.distanceMeters! < 1000) {
-                  distanceColor = KurabeColors.primary;
-                  distanceBgColor = KurabeColors.primary.withAlpha(20);
-                }
-              }
-
-              return Column(
-                children: [
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => onSelected(prediction),
-                      borderRadius: isLast
-                          ? const BorderRadius.vertical(
-                              bottom: Radius.circular(16))
-                          : BorderRadius.zero,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: KurabeColors.primary.withAlpha(15),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                PhosphorIcons.storefront(
-                                  PhosphorIconsStyle.fill,
-                                ),
-                                size: 20,
-                                color: KurabeColors.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    prediction.primaryText,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: KurabeColors.textPrimary,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  if (subtitleParts.isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 3),
-                                      child: Text(
-                                        subtitleParts.join(' • '),
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: KurabeColors.textTertiary,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            if (distanceText != null) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: distanceBgColor,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  distanceText,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: distanceColor,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            const SizedBox(width: 4),
-                            Icon(
-                              PhosphorIcons.caretRight(
-                                PhosphorIconsStyle.bold,
-                              ),
-                              size: 14,
-                              color: KurabeColors.textTertiary,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (!isLast)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 68),
-                      child: Container(
-                        height: 1,
-                        color: KurabeColors.divider,
-                      ),
-                    ),
-                ],
-              );
-            }),
-        ],
       ),
     );
   }

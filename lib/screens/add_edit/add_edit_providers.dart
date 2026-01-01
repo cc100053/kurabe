@@ -60,44 +60,6 @@ final nearbyShopsProvider =
   },
 );
 
-class ShopPredictionRequest {
-  const ShopPredictionRequest({required this.query, required this.apiKey});
-
-  final String query;
-  final String apiKey;
-}
-
-final shopPredictionsProvider = AutoDisposeFutureProviderFamily<
-    List<PlaceAutocompletePrediction>, ShopPredictionRequest>(
-  (ref, request) async {
-    final query = request.query.trim();
-    if (request.apiKey.isEmpty || query.isEmpty) {
-      return const <PlaceAutocompletePrediction>[];
-    }
-    var cancelled = false;
-    ref.onDispose(() => cancelled = true);
-
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    if (cancelled) return const <PlaceAutocompletePrediction>[];
-
-    final service = ref.watch(googlePlacesServiceProvider);
-    final coords = LocationRepository.instance.getFreshLatLng() ??
-        await LocationRepository.instance.ensureLocation();
-    if (cancelled) return const <PlaceAutocompletePrediction>[];
-
-    final predictions = await service.autocomplete(
-      apiKey: request.apiKey,
-      input: query,
-      latitude: coords?.$1,
-      longitude: coords?.$2,
-      radiusMeters: _insightRadiusMeters.toDouble(),
-      languageCode: 'ja',
-    );
-    if (cancelled) return const <PlaceAutocompletePrediction>[];
-    return _sortPredictions(predictions);
-  },
-);
-
 class InsightRequest {
   const InsightRequest({
     required this.productName,
@@ -258,23 +220,6 @@ List<GooglePlace> _prioritizeShops(List<GooglePlace> shops) {
     final distCmp = da.compareTo(db);
     if (distCmp != 0) return distCmp;
     return a.name.compareTo(b.name);
-  });
-  return sorted;
-}
-
-List<PlaceAutocompletePrediction> _sortPredictions(
-  List<PlaceAutocompletePrediction> predictions,
-) {
-  final sorted = [...predictions];
-  sorted.sort((a, b) {
-    final da = a.distanceMeters;
-    final db = b.distanceMeters;
-    if (da != null && db != null && da != db) {
-      return da.compareTo(db);
-    }
-    if (da != null && db == null) return -1;
-    if (da == null && db != null) return 1;
-    return a.primaryText.compareTo(b.primaryText);
   });
   return sorted;
 }
