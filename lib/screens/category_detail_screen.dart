@@ -27,6 +27,11 @@ class CategoryDetailScreen extends ConsumerStatefulWidget {
 
 class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   final PriceRepository _priceRepository = PriceRepository();
+  final TextEditingController _mySearchController = TextEditingController();
+  final TextEditingController _communitySearchController =
+      TextEditingController();
+  final FocusNode _mySearchFocusNode = FocusNode();
+  final FocusNode _communitySearchFocusNode = FocusNode();
 
   _CategoryView _selectedView = _CategoryView.mine;
   Future<List<PriceRecordModel>>? _myRecordsFuture;
@@ -35,12 +40,20 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   bool _guestBlocked = false;
   String? _locationError;
   ProviderSubscription<SubscriptionState>? _subscriptionSub;
+  String _mySearchQuery = '';
+  String _communitySearchQuery = '';
+  bool _isMySearchFocused = false;
+  bool _isCommunitySearchFocused = false;
 
   @override
   void initState() {
     super.initState();
     _myRecordsFuture =
         _priceRepository.getMyRecordsByCategory(widget.categoryName.trim());
+    _mySearchController.addListener(_onMySearchChanged);
+    _communitySearchController.addListener(_onCommunitySearchChanged);
+    _mySearchFocusNode.addListener(_onMySearchFocusChanged);
+    _communitySearchFocusNode.addListener(_onCommunitySearchFocusChanged);
     _subscriptionSub = ref.listenManual<SubscriptionState>(
       subscriptionProvider,
       (previous, next) {
@@ -67,6 +80,10 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   @override
   void dispose() {
     _subscriptionSub?.close();
+    _mySearchController.dispose();
+    _communitySearchController.dispose();
+    _mySearchFocusNode.dispose();
+    _communitySearchFocusNode.dispose();
     super.dispose();
   }
 
@@ -85,6 +102,32 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
       }
       _communityFuture ??= _fetchCommunityRecords();
     }
+  }
+
+  void _onMySearchChanged() {
+    final next = _mySearchController.text.trim();
+    if (next == _mySearchQuery) return;
+    if (!mounted) return;
+    setState(() => _mySearchQuery = next);
+  }
+
+  void _onCommunitySearchChanged() {
+    final next = _communitySearchController.text.trim();
+    if (next == _communitySearchQuery) return;
+    if (!mounted) return;
+    setState(() => _communitySearchQuery = next);
+  }
+
+  void _onMySearchFocusChanged() {
+    if (!mounted) return;
+    setState(() => _isMySearchFocused = _mySearchFocusNode.hasFocus);
+  }
+
+  void _onCommunitySearchFocusChanged() {
+    if (!mounted) return;
+    setState(
+      () => _isCommunitySearchFocused = _communitySearchFocusNode.hasFocus,
+    );
   }
 
   Future<List<PriceRecordModel>> _fetchCommunityRecords({
@@ -132,6 +175,14 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final isCommunity = _selectedView == _CategoryView.community;
+    final searchController =
+        isCommunity ? _communitySearchController : _mySearchController;
+    final searchFocusNode =
+        isCommunity ? _communitySearchFocusNode : _mySearchFocusNode;
+    final isSearchFocused =
+        isCommunity ? _isCommunitySearchFocused : _isMySearchFocused;
+    final searchHint =
+        isCommunity ? 'コミュニティを検索...' : '自分の記録を検索...';
 
     return Scaffold(
       backgroundColor: isCommunity
@@ -223,7 +274,17 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
               ),
             ),
 
-          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+            child: _buildSearchBar(
+              controller: searchController,
+              focusNode: searchFocusNode,
+              isFocused: isSearchFocused,
+              hintText: searchHint,
+            ),
+          ),
+
+          const SizedBox(height: 4),
 
           // Content
           Expanded(
@@ -235,6 +296,100 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  List<PriceRecordModel> _applySearchFilter(
+    List<PriceRecordModel> records,
+    String query,
+  ) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return records;
+    final needle = trimmed.toLowerCase();
+    return records
+        .where(
+          (record) =>
+              record.productName.toLowerCase().contains(needle) ||
+              (record.shopName ?? '').toLowerCase().contains(needle),
+        )
+        .toList();
+  }
+
+  Widget _buildSearchBar({
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required bool isFocused,
+    required String hintText,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: KurabeColors.surfaceElevated,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isFocused ? KurabeColors.primary : KurabeColors.border,
+          width: isFocused ? 2 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isFocused
+                ? KurabeColors.primary.withAlpha(26)
+                : Colors.black.withAlpha(8),
+            blurRadius: isFocused ? 16 : 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: KurabeColors.textPrimary,
+        ),
+        decoration: InputDecoration(
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 16, right: 12),
+            child: Icon(
+              PhosphorIcons.magnifyingGlass(PhosphorIconsStyle.bold),
+              color:
+                  isFocused ? KurabeColors.primary : KurabeColors.textTertiary,
+              size: 22,
+            ),
+          ),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 50,
+            minHeight: 50,
+          ),
+          suffixIcon: controller.text.isNotEmpty
+              ? IconButton(
+                  icon: Icon(
+                    PhosphorIcons.xCircle(PhosphorIconsStyle.fill),
+                    color: KurabeColors.textTertiary,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    controller.clear();
+                    focusNode.unfocus();
+                  },
+                )
+              : null,
+          hintText: hintText,
+          hintStyle: TextStyle(
+            color: KurabeColors.textTertiary,
+            fontWeight: FontWeight.w500,
+          ),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 16,
+          ),
+          filled: false,
+        ),
       ),
     );
   }
@@ -314,12 +469,19 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
             message: 'このカテゴリの履歴はありません',
           );
         }
+        final filteredRecords = _applySearchFilter(records, _mySearchQuery);
+        if (_mySearchQuery.isNotEmpty && filteredRecords.isEmpty) {
+          return _buildEmptyState(
+            icon: PhosphorIcons.magnifyingGlass(PhosphorIconsStyle.duotone),
+            message: '検索結果が見つかりませんでした',
+          );
+        }
         return ListView.builder(
           key: const ValueKey('mine'),
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-          itemCount: records.length,
+          itemCount: filteredRecords.length,
           itemBuilder: (context, index) {
-            return PriceRecordTile(record: records[index]);
+            return PriceRecordTile(record: filteredRecords[index]);
           },
         );
       },
@@ -415,14 +577,22 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
               message: '近くの投稿が見つかりませんでした',
             );
           }
+          final filteredRecords =
+              _applySearchFilter(records, _communitySearchQuery);
+          if (_communitySearchQuery.isNotEmpty && filteredRecords.isEmpty) {
+            return _buildEmptyState(
+              icon: PhosphorIcons.magnifyingGlass(PhosphorIconsStyle.duotone),
+              message: '検索結果が見つかりませんでした',
+            );
+          }
           final minUnitPriceByName =
-              PriceRecordHelpers.minUnitPriceByName(records);
+              PriceRecordHelpers.minUnitPriceByName(filteredRecords);
           return ListView.builder(
             key: const ValueKey('community'),
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-            itemCount: records.length,
+            itemCount: filteredRecords.length,
             itemBuilder: (context, index) {
-              final record = records[index];
+              final record = filteredRecords[index];
               final isCheapest =
                   PriceRecordHelpers.isCheapest(record, minUnitPriceByName);
               return PriceRecordTile(
