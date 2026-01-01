@@ -20,6 +20,11 @@ class PriceRepository {
   final PriceRemoteDataSource _remote;
   final PriceRecordMapper _mapper;
   final PriceCalculator _calculator;
+  static const Duration _communityCacheTtl = Duration(minutes: 10);
+  final Map<String, _CacheEntry<List<PriceRecordModel>>>
+      _communitySearchCache = {};
+  final Map<String, _CacheEntry<List<PriceRecordModel>>>
+      _categoryCommunityCache = {};
 
   bool get isGuest => _remote.isGuest;
 
@@ -146,15 +151,26 @@ class PriceRepository {
     double? lat,
     double? lng, {
     int limit = 20,
+    bool forceRefresh = false,
   }) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return [];
+    final cacheKey = _communityCacheKey(trimmed, lat, lng, limit);
+    final cached = _communitySearchCache[cacheKey];
+    if (!forceRefresh && cached != null && cached.isFresh(_communityCacheTtl)) {
+      return cached.value;
+    }
+
     final raw = await _remote.searchCommunityPricesRaw(
-      query,
+      trimmed,
       lat,
       lng,
       limit: limit,
     );
     final mapped = raw.map(_mapper.fromMap).toList();
-    return _dedupeCommunityResults(mapped);
+    final deduped = _dedupeCommunityResults(mapped);
+    _communitySearchCache[cacheKey] = _CacheEntry(deduped);
+    return deduped;
   }
 
   Future<List<PriceRecordModel>> searchMyPrices(
@@ -225,14 +241,25 @@ class PriceRepository {
     required double lat,
     required double lng,
     int radiusMeters = 3000,
+    bool forceRefresh = false,
   }) async {
+    final trimmed = categoryTag.trim();
+    if (trimmed.isEmpty) return [];
+    final cacheKey = _categoryCacheKey(trimmed, lat, lng, radiusMeters);
+    final cached = _categoryCommunityCache[cacheKey];
+    if (!forceRefresh && cached != null && cached.isFresh(_communityCacheTtl)) {
+      return cached.value;
+    }
+
     final raw = await _remote.getNearbyRecordsByCategoryRaw(
-      categoryTag: categoryTag,
+      categoryTag: trimmed,
       lat: lat,
       lng: lng,
       radiusMeters: radiusMeters,
     );
-    return raw.map(_mapper.fromMap).toList();
+    final mapped = raw.map(_mapper.fromMap).toList();
+    _categoryCommunityCache[cacheKey] = _CacheEntry(mapped);
+    return mapped;
   }
 
   String _normalizeQueryBase(String raw) {
@@ -315,5 +342,39 @@ class PriceRepository {
     });
 
     return deduped;
+  }
+
+  String _communityCacheKey(
+    String query,
+    double? lat,
+    double? lng,
+    int limit,
+  ) {
+    return 'community:$query:${_coordKey(lat)}:${_coordKey(lng)}:$limit';
+  }
+
+  String _categoryCacheKey(
+    String category,
+    double lat,
+    double lng,
+    int radiusMeters,
+  ) {
+    return 'category:$category:${_coordKey(lat)}:${_coordKey(lng)}:$radiusMeters';
+  }
+
+  String _coordKey(double? value) {
+    if (value == null) return 'na';
+    return value.toStringAsFixed(3);
+  }
+}
+
+class _CacheEntry<T> {
+  _CacheEntry(this.value) : storedAt = DateTime.now();
+
+  final T value;
+  final DateTime storedAt;
+
+  bool isFresh(Duration ttl) {
+    return DateTime.now().difference(storedAt) < ttl;
   }
 }

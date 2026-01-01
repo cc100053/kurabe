@@ -1,69 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../data/mappers/price_record_mapper.dart';
-import '../../data/models/price_record_model.dart';
+import '../../domain/price/price_record_grouping.dart';
 import '../../main.dart';
-import '../../widgets/community_product_tile.dart';
+import '../../presentation/providers/price_timeline_provider.dart';
+import '../../widgets/price_record_tile.dart';
 
-class TimelineTab extends StatefulWidget {
+class TimelineTab extends ConsumerWidget {
   const TimelineTab({super.key});
 
   @override
-  State<TimelineTab> createState() => _TimelineTabState();
-}
-
-class _TimelineTabState extends State<TimelineTab> {
-  final PriceRecordMapper _mapper = PriceRecordMapper();
-  Stream<List<PriceRecordModel>>? _stream;
-
-  @override
-  void initState() {
-    super.initState();
-    _stream = _buildStream();
-  }
-
-  Stream<List<PriceRecordModel>>? _buildStream() {
-    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    if (currentUserId == null) return null;
-    return Supabase.instance.client
-        .from('price_records')
-        .stream(primaryKey: ['id'])
-        .eq('user_id', currentUserId)
-        .order('created_at', ascending: false)
-        .map((rows) => rows
-            .whereType<Map>()
-            .map((row) => _mapper.fromMap(Map<String, dynamic>.from(row)))
-            .toList());
-  }
-
-  Future<void> _onRefresh() async {
-    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    setState(() {
-      _stream = _buildStream();
-    });
-    if (currentUserId == null) {
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-      return;
-    }
-    await Supabase.instance.client
-        .from('price_records')
-        .select('id')
-        .eq('user_id', currentUserId)
-        .order('created_at', ascending: false)
-        .limit(1);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final stream = _stream;
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(authStateChangesProvider);
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    final recordsAsync = ref.watch(timelineRecordsProvider);
 
     return Scaffold(
       backgroundColor: KurabeColors.background,
       body: RefreshIndicator(
-        onRefresh: _onRefresh,
+        onRefresh: () => _onRefresh(ref),
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
@@ -137,7 +95,7 @@ class _TimelineTabState extends State<TimelineTab> {
             ),
 
             // Content
-            if (stream == null)
+            if (userId == null)
               SliverFillRemaining(
                 child: _buildEmptyState(
                   icon: PhosphorIcons.signIn(PhosphorIconsStyle.duotone),
@@ -146,30 +104,8 @@ class _TimelineTabState extends State<TimelineTab> {
                 ),
             )
             else
-              StreamBuilder<List<PriceRecordModel>>(
-                stream: stream,
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return SliverFillRemaining(
-                      child: _buildEmptyState(
-                        icon: PhosphorIcons.warningCircle(
-                            PhosphorIconsStyle.duotone),
-                        title: 'エラーが発生しました',
-                        subtitle: '${snapshot.error}',
-                      ),
-                    );
-                  }
-                  if (!snapshot.hasData) {
-                    return const SliverFillRemaining(
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: KurabeColors.primary,
-                        ),
-                      ),
-                    );
-                  }
-                  final records = snapshot.data!;
+              recordsAsync.when(
+                data: (records) {
                   if (records.isEmpty) {
                     return SliverFillRemaining(
                       child: _buildEmptyState(
@@ -180,9 +116,7 @@ class _TimelineTabState extends State<TimelineTab> {
                       ),
                     );
                   }
-
-                  final grouped = _groupRecordsByDate(records);
-
+                  final grouped = groupPriceRecordsByDate(records);
                   return SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
@@ -192,14 +126,14 @@ class _TimelineTabState extends State<TimelineTab> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildDateHeader(context, group.dateLabel),
+                              _buildDateHeader(context, group.label),
                               ...group.records.map(
                                 (record) => Padding(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 16,
                                     vertical: 4,
                                   ),
-                                  child: CommunityProductTile(record: record),
+                                  child: PriceRecordTile(record: record),
                                 ),
                               ),
                             ],
@@ -210,6 +144,23 @@ class _TimelineTabState extends State<TimelineTab> {
                     ),
                   );
                 },
+                loading: () => const SliverFillRemaining(
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: KurabeColors.primary,
+                    ),
+                  ),
+                ),
+                error: (error, _) => SliverFillRemaining(
+                  child: _buildEmptyState(
+                    icon: PhosphorIcons.warningCircle(
+                      PhosphorIconsStyle.duotone,
+                    ),
+                    title: 'エラーが発生しました',
+                    subtitle: '$error',
+                  ),
+                ),
               ),
 
             // Bottom padding for FAB
@@ -218,6 +169,21 @@ class _TimelineTabState extends State<TimelineTab> {
         ),
       ),
     );
+  }
+
+  Future<void> _onRefresh(WidgetRef ref) async {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    ref.invalidate(timelineRecordsProvider);
+    if (currentUserId == null) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      return;
+    }
+    await Supabase.instance.client
+        .from('price_records')
+        .select('id')
+        .eq('user_id', currentUserId)
+        .order('created_at', ascending: false)
+        .limit(1);
   }
 
   String _getGreeting() {
@@ -363,39 +329,4 @@ class _TimelineTabState extends State<TimelineTab> {
     );
   }
 
-  List<_DateGroup> _groupRecordsByDate(List<PriceRecordModel> records) {
-    final groups = <String, List<PriceRecordModel>>{};
-    for (final record in records) {
-      final date = record.createdAt?.toLocal();
-      if (date == null) continue;
-      final key = _getDateLabel(date);
-      groups.putIfAbsent(key, () => []).add(record);
-    }
-    return groups.entries.map((e) => _DateGroup(e.key, e.value)).toList();
-  }
-
-  String _getDateLabel(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final target = DateTime(date.year, date.month, date.day);
-    final weekday = _weekdayLabel(date);
-
-    if (target == today) return '今日($weekday)';
-    if (target == yesterday) return '昨日($weekday)';
-    return '${DateFormat('M月d日').format(date)}($weekday)';
-  }
-
-  String _weekdayLabel(DateTime date) {
-    const labels = ['月', '火', '水', '木', '金', '土', '日'];
-    final index = date.weekday - 1;
-    if (index < 0 || index >= labels.length) return '';
-    return labels[index];
-  }
-}
-
-class _DateGroup {
-  final String dateLabel;
-  final List<PriceRecordModel> records;
-  _DateGroup(this.dateLabel, this.records);
 }

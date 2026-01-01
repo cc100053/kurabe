@@ -8,14 +8,14 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../data/models/price_record_model.dart';
 import '../../data/repositories/price_repository.dart';
-import '../../domain/price/price_calculator.dart';
+import '../../domain/price/price_record_helpers.dart';
 import '../../main.dart';
 import '../../constants/categories.dart';
 import '../../constants/category_visuals.dart';
 import '../../providers/subscription_provider.dart';
 import '../../screens/paywall_screen.dart';
 import '../../screens/category_detail_screen.dart';
-import '../../widgets/community_product_tile.dart';
+import '../../widgets/price_record_tile.dart';
 import '../../services/location_service.dart';
 
 class CatalogTab extends ConsumerStatefulWidget {
@@ -27,7 +27,6 @@ class CatalogTab extends ConsumerStatefulWidget {
 
 class _CatalogTabState extends ConsumerState<CatalogTab> {
   final PriceRepository _priceRepository = PriceRepository();
-  final PriceCalculator _priceCalculator = const PriceCalculator();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
@@ -364,14 +363,15 @@ class _CatalogTabState extends ConsumerState<CatalogTab> {
         ..._mySearchResults.map(
           (record) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: CommunityProductTile(record: record),
+            child: PriceRecordTile(record: record),
           ),
         ),
         const SizedBox(height: 8),
       ]);
     }
     if (isPro && _searchResults.isNotEmpty) {
-      final minUnitPriceByName = _findMinUnitPriceByName(_searchResults);
+      final minUnitPriceByName =
+          PriceRecordHelpers.minUnitPriceByName(_searchResults);
       children.addAll([
         const Padding(
           padding: EdgeInsets.fromLTRB(4, 8, 4, 8),
@@ -385,15 +385,11 @@ class _CatalogTabState extends ConsumerState<CatalogTab> {
           ),
         ),
         ..._searchResults.map((record) {
-          final unitPrice = _effectiveUnitPrice(record);
-          final name = record.productName.trim().toLowerCase();
-          final minForName = minUnitPriceByName[name];
-          final isCheapest = unitPrice != null &&
-              minForName != null &&
-              (unitPrice - minForName).abs() < 1e-6;
+          final isCheapest =
+              PriceRecordHelpers.isCheapest(record, minUnitPriceByName);
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: CommunityProductTile(
+            child: PriceRecordTile(
               record: record,
               isCheapestOverride: isCheapest,
             ),
@@ -602,28 +598,4 @@ class _CatalogTabState extends ConsumerState<CatalogTab> {
     );
   }
 
-  double? _effectiveUnitPrice(PriceRecordModel record) {
-    return record.effectiveUnitPrice ??
-        _priceCalculator.unitPrice(
-          price: record.price,
-          quantity: record.quantity,
-        );
-  }
-
-  Map<String, double> _findMinUnitPriceByName(
-    List<PriceRecordModel> records,
-  ) {
-    final map = <String, double>{};
-    for (final record in records) {
-      final unitPrice = _effectiveUnitPrice(record);
-      if (unitPrice == null) continue;
-      final name = record.productName.trim().toLowerCase();
-      if (name.isEmpty) continue;
-      final current = map[name];
-      if (current == null || unitPrice < current) {
-        map[name] = unitPrice;
-      }
-    }
-    return map;
-  }
 }

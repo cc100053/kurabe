@@ -6,12 +6,12 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../data/models/price_record_model.dart';
 import '../data/repositories/price_repository.dart';
-import '../domain/price/price_calculator.dart';
+import '../domain/price/price_record_helpers.dart';
 import '../main.dart';
 import '../providers/subscription_provider.dart';
 import '../services/location_service.dart';
 import '../screens/paywall_screen.dart';
-import '../widgets/community_product_tile.dart';
+import '../widgets/price_record_tile.dart';
 
 enum _CategoryView { mine, community }
 
@@ -27,14 +27,10 @@ class CategoryDetailScreen extends ConsumerStatefulWidget {
 
 class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   final PriceRepository _priceRepository = PriceRepository();
-  final PriceCalculator _priceCalculator = const PriceCalculator();
 
   _CategoryView _selectedView = _CategoryView.mine;
   Future<List<PriceRecordModel>>? _myRecordsFuture;
   Future<List<PriceRecordModel>>? _communityFuture;
-  List<PriceRecordModel>? _communityCache;
-  DateTime? _communityCacheTime;
-  static const Duration _communityCacheTtl = Duration(minutes: 10);
   static const int _communityRadiusMeters = 3000;
   bool _guestBlocked = false;
   String? _locationError;
@@ -55,8 +51,6 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           if (next.isPro) {
             setState(() {
               _guestBlocked = false;
-              _communityCache = null;
-              _communityCacheTime = null;
               _communityFuture = _fetchCommunityRecords(forceRefresh: true);
             });
           } else {
@@ -93,11 +87,6 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     }
   }
 
-  bool _isCommunityCacheFresh() {
-    if (_communityCache == null || _communityCacheTime == null) return false;
-    return DateTime.now().difference(_communityCacheTime!) < _communityCacheTtl;
-  }
-
   Future<List<PriceRecordModel>> _fetchCommunityRecords({
     bool forceRefresh = false,
   }) async {
@@ -107,9 +96,6 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     if (!isPro) {
       setState(() => _guestBlocked = true);
       return <PriceRecordModel>[];
-    }
-    if (!forceRefresh && _isCommunityCacheFresh()) {
-      return _communityCache!;
     }
     if (_priceRepository.isGuest) {
       setState(() => _guestBlocked = true);
@@ -138,9 +124,8 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
       lat: lat,
       lng: lng,
       radiusMeters: _communityRadiusMeters,
+      forceRefresh: forceRefresh,
     );
-    _communityCache = result;
-    _communityCacheTime = DateTime.now();
     return result;
   }
 
@@ -334,7 +319,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           itemCount: records.length,
           itemBuilder: (context, index) {
-            return CommunityProductTile(record: records[index]);
+            return PriceRecordTile(record: records[index]);
           },
         );
       },
@@ -405,8 +390,6 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
       color: KurabeColors.primary,
       onRefresh: () async {
         setState(() {
-          _communityCache = null;
-          _communityCacheTime = null;
           _communityFuture = _fetchCommunityRecords(forceRefresh: true);
         });
         await _communityFuture;
@@ -432,20 +415,17 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
               message: '近くの投稿が見つかりませんでした',
             );
           }
-          final minUnitPriceByName = _findMinUnitPriceByName(records);
+          final minUnitPriceByName =
+              PriceRecordHelpers.minUnitPriceByName(records);
           return ListView.builder(
             key: const ValueKey('community'),
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
             itemCount: records.length,
             itemBuilder: (context, index) {
               final record = records[index];
-              final unitPrice = _effectiveUnitPrice(record);
-              final productName = record.productName.trim().toLowerCase();
-              final minForName = minUnitPriceByName[productName];
-              final isCheapest = unitPrice != null &&
-                  minForName != null &&
-                  (unitPrice - minForName).abs() < 1e-6;
-              return CommunityProductTile(
+              final isCheapest =
+                  PriceRecordHelpers.isCheapest(record, minUnitPriceByName);
+              return PriceRecordTile(
                 record: record,
                 isCheapestOverride: isCheapest,
               );
@@ -527,28 +507,4 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     );
   }
 
-  double? _effectiveUnitPrice(PriceRecordModel record) {
-    return record.effectiveUnitPrice ??
-        _priceCalculator.unitPrice(
-          price: record.price,
-          quantity: record.quantity,
-        );
-  }
-
-  Map<String, double> _findMinUnitPriceByName(
-    List<PriceRecordModel> records,
-  ) {
-    final map = <String, double>{};
-    for (final record in records) {
-      final unitPrice = _effectiveUnitPrice(record);
-      if (unitPrice == null) continue;
-      final name = record.productName.trim().toLowerCase();
-      if (name.isEmpty) continue;
-      final current = map[name];
-      if (current == null || unitPrice < current) {
-        map[name] = unitPrice;
-      }
-    }
-    return map;
-  }
 }

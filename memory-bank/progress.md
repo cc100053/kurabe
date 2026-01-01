@@ -33,3 +33,6 @@ Step 3 status
 
 Step 4 status
 - Completed: Add/Edit flow refactored to ViewModel + segmented widgets, OCR/compression/Gemini moved into use case, save flow centralized, and shop autocomplete/community insight now use cancellable FutureProviders.
+
+Step 5 status
+- Completed: Timeline uses StreamProvider, Catalog/Timeline/Category detail share a common tile and unit-price helper, date grouping extracted, and community/category queries now cached in the repository.
