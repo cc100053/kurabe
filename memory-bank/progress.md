@@ -30,3 +30,6 @@ Step 2 status
 
 Step 3 status
 - Completed: promoted LocationService to `LocationRepository` with shared permission handling, caching, and nearby shop lookups; wired Category detail, product insight sheet, Catalog search, and Add/Edit providers to reuse it with consistent user-facing errors.
+
+Step 4 status
+- Completed: Add/Edit flow refactored to ViewModel + segmented widgets, OCR/compression/Gemini moved into use case, save flow centralized, and shop autocomplete/community insight now use cancellable FutureProviders.

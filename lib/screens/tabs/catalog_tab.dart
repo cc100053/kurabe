@@ -438,7 +438,7 @@ class _CatalogTabState extends ConsumerState<CatalogTab> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Found $_communityResultCount cheaper options in the community!',
+                        'コミュニティで$_communityResultCount件のより安い価格を発見！',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,

@@ -77,6 +77,9 @@ final shopPredictionsProvider = AutoDisposeFutureProviderFamily<
     var cancelled = false;
     ref.onDispose(() => cancelled = true);
 
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (cancelled) return const <PlaceAutocompletePrediction>[];
+
     final service = ref.watch(googlePlacesServiceProvider);
     final coords = LocationRepository.instance.getFreshLatLng() ??
         await LocationRepository.instance.ensureLocation();
@@ -137,16 +140,16 @@ final communityInsightProvider =
     var cancelled = false;
     ref.onDispose(() => cancelled = true);
 
-    // Debounce to avoid rapid refetch while the user is typing.
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    if (cancelled) return AddEditInsight.idle;
-
     final productName =
         request.productName.replaceAll(RegExp(r'[\s\u3000]+'), '');
     if (productName.isEmpty || request.finalTaxedTotal == null) {
       return AddEditInsight.idle;
     }
     if (request.apiKey.isEmpty) return AddEditInsight.idle;
+
+    // Debounce to avoid rapid refetch while the user is typing.
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    if (cancelled) return AddEditInsight.idle;
 
     (double, double)? coords;
     try {
@@ -180,21 +183,58 @@ final communityInsightProvider =
       return AddEditInsight.none;
     }
     if (cancelled) return AddEditInsight.idle;
-    if (cheapest == null) return AddEditInsight.none;
+    if (cheapest == null) {
+      if (!request.isPro) {
+        try {
+          final count = await repository
+              .countCommunityPrices(
+                productName,
+                coords.$1,
+                coords.$2,
+                limit: 3,
+              )
+              .timeout(const Duration(seconds: 6));
+          if (cancelled) return AddEditInsight.idle;
+          if (count > 0) {
+            return const AddEditInsight(
+              status: InsightStatus.found,
+              gated: true,
+              gatedMessage: '周辺に記録があります。Proで店舗と価格を表示。',
+            );
+          }
+        } catch (_) {
+          return AddEditInsight.none;
+        }
+      }
+      return AddEditInsight.none;
+    }
 
     final nearbyUnitPrice = cheapest.effectiveUnitPrice;
-    final isBest = userUnitPrice != null && nearbyUnitPrice != null
-        ? userUnitPrice < (nearbyUnitPrice - 0.01)
-        : false;
+    if (userUnitPrice == null || nearbyUnitPrice == null) {
+      if (!request.isPro) {
+        return const AddEditInsight(
+          status: InsightStatus.none,
+          gated: true,
+          gatedMessage: '周辺に記録があります。Proで店舗と価格を表示。',
+        );
+      }
+      return AddEditInsight.none;
+    }
+    final isBest = calculator.isBetterOrEqualUnitPrice(
+      candidate: userUnitPrice,
+      comparison: nearbyUnitPrice,
+    );
 
     // For non-Pro users, only reveal that a cheaper price exists without store/price details.
     if (!request.isPro) {
       if (isBest) {
-        return AddEditInsight(
+        return const AddEditInsight(
           status: InsightStatus.best,
+          gated: true,
+          gatedMessage: '周辺最安値です。Proで詳細を確認。',
         );
       }
-      return AddEditInsight(
+      return const AddEditInsight(
         status: InsightStatus.found,
         gated: true,
         gatedMessage: '周辺に安い店舗があります。Proで店舗と価格を表示。',

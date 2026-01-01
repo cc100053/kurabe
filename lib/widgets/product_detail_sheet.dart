@@ -536,7 +536,7 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
     final count = _communityLockedCount;
     final hasCount = count != null && count > 0;
     final headline = hasCount
-        ? 'Found $count cheaper options in the community!'
+        ? 'コミュニティで$count件のより安い価格を発見！'
         : 'コミュニティ価格を解放しよう';
     final subtitle = hasCount
         ? 'Proで店舗名と価格の詳細を確認できます。'
