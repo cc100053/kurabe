@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../main.dart';
 import '../constants/auth.dart';
+import '../services/auth_error_mapper.dart';
+import '../widgets/app_snackbar.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -26,94 +28,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   /// Converts auth exceptions to user-friendly Japanese messages
   String _friendlyErrorMessage(dynamic error) {
-    final msg = error.toString().toLowerCase();
-
-    // Password errors
-    if (msg.contains('password') &&
-        (msg.contains('6') || msg.contains('least'))) {
-      return 'パスワードは6文字以上で入力してください。';
-    }
-    if (msg.contains('weak') && msg.contains('password')) {
-      return 'パスワードが弱すぎます。より強力なパスワードを設定してください。';
-    }
-
-    // Login errors
-    if (msg.contains('invalid') &&
-        (msg.contains('login') || msg.contains('credentials'))) {
-      return 'メールアドレスまたはパスワードが正しくありません。';
-    }
-
-    // Email errors
-    if (msg.contains('invalid') && msg.contains('email')) {
-      return 'メールアドレスの形式が正しくありません。';
-    }
-    if ((msg.contains('email') || msg.contains('user')) &&
-        msg.contains('already') &&
-        (msg.contains('registered') || msg.contains('exists'))) {
-      return 'このメールアドレスは既に登録されています。';
-    }
-    if (msg.contains('email') &&
-        msg.contains('not') &&
-        msg.contains('confirmed')) {
-      return 'メールアドレスが確認されていません。受信箱を確認してください。';
-    }
-
-    // Network errors
-    if (msg.contains('network') ||
-        msg.contains('connection') ||
-        msg.contains('timeout') ||
-        msg.contains('socket')) {
-      return 'ネットワーク接続に問題があります。接続を確認してください。';
-    }
-
-    // Rate limiting
-    if (msg.contains('rate') && msg.contains('limit')) {
-      return 'リクエストが多すぎます。しばらく待ってから再試行してください。';
-    }
-
-    // Generic fallback
-    return '予期せぬエラーが発生しました。もう一度お試しください。';
+    return AuthErrorMapper.message(error);
   }
 
   /// Shows a floating SnackBar with the given message
   void _showStatusSnackBar(String message, {bool isError = false}) {
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isError
-                  ? PhosphorIcons.warningCircle(PhosphorIconsStyle.fill)
-                  : PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
-              color: Colors.white,
-              size: 20,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: isError ? KurabeColors.error : KurabeColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        duration: const Duration(seconds: 3),
-        dismissDirection: DismissDirection.horizontal,
-      ),
-    );
+    AppSnackbar.show(context, message, isError: isError);
   }
 
   @override

@@ -41,8 +41,8 @@ class SubscriptionState {
   }
 }
 
-class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
-  SubscriptionNotifier(this._service) : super(const SubscriptionState()) {
+class SubscriptionController extends StateNotifier<SubscriptionState> {
+  SubscriptionController(this._service) : super(const SubscriptionState()) {
     _init();
   }
 
@@ -70,7 +70,7 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
       state = state.copyWith(
         isLoading: false,
         initialized: true,
-        error: e.toString(),
+        error: _friendlyError(e),
       );
     }
   }
@@ -89,7 +89,7 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
         await _refreshStatus();
       },
       onError: (Object error, StackTrace stackTrace) {
-        debugPrint('[SubscriptionNotifier] auth listener error: $error');
+        debugPrint('[SubscriptionController] auth listener error: $error');
       },
     );
   }
@@ -196,6 +196,9 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
   }
 
   String _friendlyError(Object error) {
+    if (error is SubscriptionException) {
+      return error.message;
+    }
     final msg = error.toString().toLowerCase();
     if (msg.contains('network') ||
         msg.contains('connection') ||
@@ -219,7 +222,7 @@ class SubscriptionNotifier extends StateNotifier<SubscriptionState> {
 }
 
 final subscriptionProvider =
-    StateNotifierProvider<SubscriptionNotifier, SubscriptionState>((ref) {
+    StateNotifierProvider<SubscriptionController, SubscriptionState>((ref) {
   final config = ref.watch(appConfigProvider);
-  return SubscriptionNotifier(SubscriptionService(config: config));
+  return SubscriptionController(SubscriptionService(config: config));
 });

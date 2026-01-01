@@ -4,6 +4,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../main.dart';
 import '../providers/subscription_provider.dart';
+import '../widgets/app_snackbar.dart';
 
 class PaywallScreen extends ConsumerStatefulWidget {
   const PaywallScreen({super.key});
@@ -32,14 +33,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
       (previous, next) {
         final error = next.error;
         if (error != null && error.isNotEmpty && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(error)),
-          );
+          AppSnackbar.show(context, error, isError: true);
         }
         if (previous?.isPro == false && next.isPro && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Proを有効化しました！🎉')),
-          );
+          AppSnackbar.show(context, 'Proを有効化しました！🎉');
           Navigator.of(context).maybePop();
         }
       },
@@ -682,7 +679,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
     );
   }
 
-  Widget _buildCTAButton(SubscriptionState subState, SubscriptionNotifier notifier) {
+  Widget _buildCTAButton(
+    SubscriptionState subState,
+    SubscriptionController notifier,
+  ) {
     final packageId = _selectedPlanIndex >= 0 &&
             _selectedPlanIndex < _packageIds.length
         ? _packageIds[_selectedPlanIndex]
@@ -751,7 +751,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
     );
   }
 
-  Widget _buildFooterLinks(SubscriptionState subState, SubscriptionNotifier notifier) {
+  Widget _buildFooterLinks(
+    SubscriptionState subState,
+    SubscriptionController notifier,
+  ) {
     return Column(
       children: [
         TextButton(

@@ -36,3 +36,6 @@ Step 4 status
 
 Step 5 status
 - Completed: Timeline uses StreamProvider, Catalog/Timeline/Category detail share a common tile and unit-price helper, date grouping extracted, and community/category queries now cached in the repository.
+
+Step 6 status
+- Completed: Shared AuthErrorMapper + AppSnackbar for auth flows, SubscriptionController consolidated purchase/restore/paywall handling, and RevenueCat test key fallback removed with friendly missing-key messaging.

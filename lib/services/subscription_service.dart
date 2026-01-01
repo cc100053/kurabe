@@ -8,6 +8,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/config/app_config.dart';
 
+class SubscriptionException implements Exception {
+  SubscriptionException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// Handles RevenueCat initialization, login and entitlement syncing.
 class SubscriptionService {
   SubscriptionService({SupabaseClient? client, AppConfig? config})
@@ -18,16 +27,23 @@ class SubscriptionService {
   final AppConfig? _config;
   bool _configured = false;
   bool _hasListener = false;
+  String? _lastError;
 
   static const String _proEntitlementId = 'カイログ Pro';
-  static const String _fallbackApiKey = 'test_RVGeIzWYzfusuOXUuNwueYEhskf';
+
+  String? get lastError => _lastError;
 
   Future<bool> configure() async {
     if (_configured) return true;
     final envKey =
         (_config?.revenuecatApiKey ?? dotenv.env['REVENUECAT_API_KEY'] ?? '')
             .trim();
-    final revenuecatKey = envKey.isNotEmpty ? envKey : _fallbackApiKey;
+    if (envKey.isEmpty) {
+      _lastError = 'RevenueCatのAPIキーが未設定です。設定を確認してください。';
+      _configured = false;
+      return false;
+    }
+    final revenuecatKey = envKey;
     try {
       final userId = _client.auth.currentUser?.id;
       final configuration = PurchasesConfiguration(revenuecatKey)
@@ -36,11 +52,13 @@ class SubscriptionService {
             EntitlementVerificationMode.informational;
       await Purchases.configure(configuration);
       _configured = true;
+      _lastError = null;
       _attachCustomerInfoListener();
       debugPrint('[SubscriptionService] RevenueCat configured.');
       return true;
     } catch (e) {
       debugPrint('[SubscriptionService] Failed to configure: $e');
+      _lastError = 'RevenueCat を初期化できませんでした。';
       _configured = false;
       return false;
     }
@@ -94,11 +112,15 @@ class SubscriptionService {
   Future<bool> purchasePackage(String packageId) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) {
-      throw Exception('ログイン後に購入してください。');
+      throw SubscriptionException('ログイン後に購入してください。');
     }
     if (!_configured) {
       final configured = await configure();
-      if (!configured) throw Exception('RevenueCat を初期化できませんでした。');
+      if (!configured) {
+        throw SubscriptionException(
+          _lastError ?? 'RevenueCat を初期化できませんでした。',
+        );
+      }
     }
     final offerings = await Purchases.getOfferings();
     final available = offerings.current?.availablePackages ?? [];
@@ -126,7 +148,9 @@ class SubscriptionService {
       package = available.first;
     }
     package ??= offerings.current?.monthly;
-    if (package == null) throw Exception('購入可能なプランが見つかりません。');
+    if (package == null) {
+      throw SubscriptionException('購入可能なプランが見つかりません。');
+    }
     final result = await Purchases.purchase(
       PurchaseParams.package(package),
     );
@@ -136,7 +160,11 @@ class SubscriptionService {
   Future<bool> restore() async {
     if (!_configured) {
       final configured = await configure();
-      if (!configured) return false;
+      if (!configured) {
+        throw SubscriptionException(
+          _lastError ?? 'RevenueCat を初期化できませんでした。',
+        );
+      }
     }
     try {
       final info = await Purchases.restorePurchases();
@@ -150,7 +178,11 @@ class SubscriptionService {
   Future<bool> showRevenueCatPaywall(BuildContext context) async {
     if (!_configured) {
       final ok = await configure();
-      if (!ok) throw Exception('RevenueCat を初期化できませんでした。');
+      if (!ok) {
+        throw SubscriptionException(
+          _lastError ?? 'RevenueCat を初期化できませんでした。',
+        );
+      }
     }
     final result = await RevenueCatUI.presentPaywallIfNeeded(
       _proEntitlementId,
@@ -166,7 +198,11 @@ class SubscriptionService {
   Future<void> showCustomerCenter(BuildContext context) async {
     if (!_configured) {
       final ok = await configure();
-      if (!ok) throw Exception('RevenueCat を初期化できませんでした。');
+      if (!ok) {
+        throw SubscriptionException(
+          _lastError ?? 'RevenueCat を初期化できませんでした。',
+        );
+      }
     }
     await RevenueCatUI.presentCustomerCenter();
   }
