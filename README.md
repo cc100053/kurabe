@@ -42,6 +42,7 @@ cp .env.example .env
 3) Install deps and run  
 ```bash
 flutter pub get
+cd ios && pod install
 flutter run
 ```
 
@@ -65,13 +66,52 @@ Key packages:
 - Storage bucket `price_tags` stays public upload/read (app already uploads with anonymous/auth sessions).
 - Tax: app sends `is_tax_included` and `tax_rate` (0.08 for 飲食料品, 0.10 otherwise). Add `tax_rate real not null default 0.10` to `price_records` to persist it.
 
+## Sign in with Apple (iOS native)
+
+Kurabe uses **native** Apple Sign-In on iOS (`sign_in_with_apple` + `supabase.auth.signInWithIdToken`), so users don’t need to complete the OAuth flow in a browser.
+
+### Checklist
+
+1) Apple Developer (Certificates, Identifiers & Profiles)
+- **App ID**: enable “Sign in with Apple” for the iOS bundle id `com.cc100053.kurabe`
+- **Services ID**: create/configure `com.kurabe.app.service` and enable “Sign in with Apple”
+- **Return URL / Domains**: in the Services ID config, add:
+  - Return URL: `https://<your-project-ref>.supabase.co/auth/v1/callback`
+  - Domain: `<your-project-ref>.supabase.co`
+- **Key**: create an Apple key with “Sign in with Apple”, download the `.p8`, and note:
+  - Team ID
+  - Key ID
+
+2) Generate Apple client secret (JWT) for Supabase
+- Generate locally (do not upload your `.p8` anywhere):
+```bash
+node tool/generate_apple_client_secret.mjs \
+  --p8 /path/to/AuthKey_XXXXXXXXXX.p8 \
+  --team-id YOUR_TEAM_ID \
+  --key-id YOUR_KEY_ID \
+  --client-id com.kurabe.app.service \
+  --days 180
+```
+- Paste the output JWT into Supabase; regenerate before it expires (max 180 days).
+
+3) Supabase Dashboard → Authentication → Providers → Apple
+- Enable Apple provider
+- **Client IDs**: add both
+  - `com.kurabe.app.service` (Services ID)
+  - `com.cc100053.kurabe` (iOS bundle id)
+- **Secret Key**: paste the generated JWT client secret
+
+4) iOS project config
+- The repo includes `ios/Runner/Runner.entitlements` with the Apple Sign-In entitlement.
+- Test on a real iOS device (Apple Sign-In isn’t reliable on simulators).
+
 ## Dependency Notes
 
 - Currently pinned to `supabase` 2.10.0 / `supabase_flutter` 2.10.3. Newer versions exist; upgrade only after verifying auth/storage/RPC flows with `flutter pub upgrade` and app smoke tests.
 
 ## RevenueCat Setup
 
-- Dashboard: Create entitlement `カイログ Pro`. Create products `monthly`, `yearly`, `lifetime` in App Store/Play, add them to an offering (e.g., “default”), attach a Paywall if you want prebuilt UI.
+- Dashboard: Create entitlement `カイログ Pro`. Keep package identifiers aligned with the app UI: `monthly`, `quarterly`, `annual`.
 - App: Set `REVENUECAT_API_KEY` in `.env`. The app initializes RevenueCat early, syncs `is_pro` to Supabase `profiles`, and gates community views. Paywall screen includes:
   - Subscribe/Restore
   - Open RevenueCat Paywall (prebuilt)
@@ -83,6 +123,12 @@ Key packages:
 - **Auth key errors**: Verify `.env` uses the current Supabase anon key and correct URL; restart the app after edits
 - **Location issues**: Community view requires location permission; cheapest badge uses per-product grouping client-side
 - **Build issues**: Ensure Flutter SDK 3.9.x+ and run `flutter pub get` after pulling
+- **iOS device install fails with sqlite3 invalid signature**: If you see `Failed to verify code signature ... sqlite3arm64ios_sim.framework ... 0xe8008014`, you’re installing a stale build that still embeds an old native asset. Run:
+  - `flutter clean`
+  - `rm -rf build/native_assets .dart_tool/flutter_build`
+  - `flutter pub get`
+  - then rebuild/run on device
+  - If you launch from Xcode, also clean build folder and delete DerivedData.
 
 ## Screenshots
 

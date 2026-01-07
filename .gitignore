@@ -49,6 +49,9 @@ app.*.map.json
 
 # Local environment
 .env
+*.p8
+AuthKey_*.p8
 
-# Database notes
+# notes
 db.md
+ai.md

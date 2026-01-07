@@ -13,6 +13,7 @@ import '../../data/repositories/price_repository.dart';
 import '../../main.dart';
 import '../../constants/auth.dart';
 import '../../services/auth_error_mapper.dart';
+import '../../services/apple_sign_in_service.dart';
 import '../../widgets/app_snackbar.dart';
 import '../paywall_screen.dart';
 import '../../providers/subscription_provider.dart';
@@ -29,6 +30,7 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
   StreamSubscription<AuthState>? _authStateSub;
   OAuthProvider? _lastProvider;
   List<Map<String, dynamic>>? _pendingGuestRecords;
+  List<Map<String, dynamic>>? _pendingGuestShoppingItems;
   bool _isLoading = false;
   late Future<Map<String, dynamic>> _statsFuture;
   bool _isUpdatingProfile = false;
@@ -89,8 +91,10 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
     _authStateSub = Supabase.instance.client.auth.onAuthStateChange.listen(
       (state) async {
         if (state.event == AuthChangeEvent.signedIn &&
-            _pendingGuestRecords != null &&
-            _pendingGuestRecords!.isNotEmpty) {
+            ((_pendingGuestRecords != null &&
+                    _pendingGuestRecords!.isNotEmpty) ||
+                (_pendingGuestShoppingItems != null &&
+                    _pendingGuestShoppingItems!.isNotEmpty))) {
           await _migrateGuestRecords();
         }
       },
@@ -166,13 +170,27 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
   Future<void> _migrateGuestRecords() async {
     final newUserId = Supabase.instance.client.auth.currentUser?.id;
     final records = _pendingGuestRecords;
+    final shoppingItems = _pendingGuestShoppingItems;
     _pendingGuestRecords = null;
-    if (newUserId == null || records == null || records.isEmpty) return;
-    final payload = records
-        .map((r) => Map<String, dynamic>.from(r)..['user_id'] = newUserId)
-        .toList();
+    _pendingGuestShoppingItems = null;
     try {
-      await Supabase.instance.client.from('price_records').insert(payload);
+      if (newUserId == null) return;
+
+      if (records != null && records.isNotEmpty) {
+        final payload = records
+            .map((r) => Map<String, dynamic>.from(r)..['user_id'] = newUserId)
+            .toList();
+        await Supabase.instance.client.from('price_records').insert(payload);
+      }
+
+      if (shoppingItems != null && shoppingItems.isNotEmpty) {
+        final payload = shoppingItems
+            .map((r) => Map<String, dynamic>.from(r)..['user_id'] = newUserId)
+            .toList();
+        await Supabase.instance.client
+            .from('shopping_list_items')
+            .insert(payload);
+      }
       if (mounted) {
         _showStatusSnackBar('ゲストの記録をアカウントに引き継ぎました。');
         refreshStats();
@@ -202,6 +220,21 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
       }).toList();
     } catch (_) {
       _pendingGuestRecords = null;
+    }
+
+    try {
+      final rows = await Supabase.instance.client
+          .from('shopping_list_items')
+          .select()
+          .eq('user_id', guestUserId);
+      _pendingGuestShoppingItems = rows.whereType<Map>().map((e) {
+        final copy = Map<String, dynamic>.from(e);
+        copy.remove('id');
+        copy['user_id'] = null;
+        return copy;
+      }).toList();
+    } catch (_) {
+      _pendingGuestShoppingItems = null;
     }
   }
 
@@ -905,19 +938,33 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
     setState(() => _isLoading = true);
     try {
       final auth = Supabase.instance.client.auth;
-      if (_priceRepository.isGuest) {
-        await auth.linkIdentity(
-          provider,
-          redirectTo: supabaseRedirectUri,
+      if (provider == OAuthProvider.apple && Platform.isIOS) {
+        await _captureGuestRecords();
+        final credential = await const AppleSignInService().authorize();
+        await auth.signInWithIdToken(
+          provider: OAuthProvider.apple,
+          idToken: credential.idToken,
+          nonce: credential.rawNonce,
         );
       } else {
-        await auth.signInWithOAuth(
-          provider,
-          redirectTo: supabaseRedirectUri,
-        );
+        if (_priceRepository.isGuest) {
+          await auth.linkIdentity(
+            provider,
+            redirectTo: supabaseRedirectUri,
+          );
+        } else {
+          await auth.signInWithOAuth(
+            provider,
+            redirectTo: supabaseRedirectUri,
+          );
+        }
       }
       if (!mounted) return;
-      _showStatusSnackBar('連携用のブラウザを開きました。サインインを完了してください。');
+      if (provider == OAuthProvider.apple && Platform.isIOS) {
+        _showStatusSnackBar('Appleでサインインしました。');
+      } else {
+        _showStatusSnackBar('連携用のブラウザを開きました。サインインを完了してください。');
+      }
     } catch (e) {
       await _handleLinkError(e, provider);
     } finally {

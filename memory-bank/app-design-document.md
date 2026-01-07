@@ -3,7 +3,7 @@ Kurabe app design
 - Product vision: Quick price-tag capture in Japanese stores, AI-assisted parsing, and community comparisons that unlock with a Pro subscription. Users snap, confirm details, and build a personal + community-powered catalog.
 - Target users: Shoppers in Japan who want fast grocery/household price tracking, with Pro upsell for community insights.
 - Core journeys:
-  - Onboard & auth: Welcome screen → Supabase auth (guest, Google, Apple, email). Guests can start immediately; linking later migrates data.
+  - Onboard & auth: Welcome screen → Supabase auth (guest, Google, Apple, email). Apple sign-in uses the iOS native flow (id token + nonce). Guests can start immediately; linking later migrates data.
   - Capture/edit: FAB opens `AddEditScreen`; smart camera with guided overlay, Gemini 1.5 prompt extracts product/price/discount/category, user confirms quantity, tax inclusion, tax rate, price type, discount, and category. Google Places nearby/Autocomplete powers shop selection; images upload to `price_tags`; Supabase save computes best-price flag via `get_nearby_cheapest`.
   - Timeline: Personal feed streaming `price_records` by `user_id`, grouped by date with community-style tiles and empty/error/login states.
   - Catalog & community: Category grid with glass cards; detail screen splits “My” vs “Community Nearby” (Pro unlock) with confirmation counts and cheapest badges. Search tabs: fuzzy product search (my data vs community) gated for guests/non-Pro.

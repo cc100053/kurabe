@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../main.dart';
 import '../constants/auth.dart';
 import '../services/auth_error_mapper.dart';
+import '../services/apple_sign_in_service.dart';
 import '../widgets/app_snackbar.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -514,16 +515,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     await _runAuthAction(() async {
       final auth = Supabase.instance.client.auth;
       final isAnon = _isAnonymousSession(auth.currentSession);
-      if (isAnon) {
-        await auth.linkIdentity(
-          OAuthProvider.apple,
-          redirectTo: supabaseRedirectUri,
-        );
-      } else {
-        await auth.signInWithOAuth(
-          OAuthProvider.apple,
-          redirectTo: supabaseRedirectUri,
-        );
+      final pending = isAnon ? await _captureGuestData() : null;
+      final credential = await const AppleSignInService().authorize();
+      await auth.signInWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: credential.idToken,
+        nonce: credential.rawNonce,
+      );
+      if (pending != null) {
+        await _migrateGuestData(pending);
       }
       return null;
     });
@@ -552,6 +552,75 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
     final metaFlag = (user.userMetadata ?? const {})['is_anonymous'];
     return metaFlag is bool && metaFlag;
+  }
+
+  Future<
+      ({
+        List<Map<String, dynamic>> priceRecords,
+        List<Map<String, dynamic>> shoppingListItems
+      })?> _captureGuestData() async {
+    final guestUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (guestUserId == null) return null;
+
+    List<Map<String, dynamic>> priceRecords = const [];
+    List<Map<String, dynamic>> shoppingListItems = const [];
+
+    try {
+      final rows = await Supabase.instance.client
+          .from('price_records')
+          .select()
+          .eq('user_id', guestUserId);
+      priceRecords = rows.whereType<Map>().map((e) {
+        final copy = Map<String, dynamic>.from(e);
+        copy.remove('id');
+        copy['user_id'] = null;
+        return copy;
+      }).toList();
+    } catch (_) {
+      priceRecords = const [];
+    }
+
+    try {
+      final rows = await Supabase.instance.client
+          .from('shopping_list_items')
+          .select()
+          .eq('user_id', guestUserId);
+      shoppingListItems = rows.whereType<Map>().map((e) {
+        final copy = Map<String, dynamic>.from(e);
+        copy.remove('id');
+        copy['user_id'] = null;
+        return copy;
+      }).toList();
+    } catch (_) {
+      shoppingListItems = const [];
+    }
+
+    if (priceRecords.isEmpty && shoppingListItems.isEmpty) return null;
+    return (priceRecords: priceRecords, shoppingListItems: shoppingListItems);
+  }
+
+  Future<void> _migrateGuestData(
+    ({
+      List<Map<String, dynamic>> priceRecords,
+      List<Map<String, dynamic>> shoppingListItems
+    }) pending,
+  ) async {
+    final newUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (newUserId == null) return;
+
+    if (pending.priceRecords.isNotEmpty) {
+      final payload = pending.priceRecords
+          .map((r) => Map<String, dynamic>.from(r)..['user_id'] = newUserId)
+          .toList();
+      await Supabase.instance.client.from('price_records').insert(payload);
+    }
+
+    if (pending.shoppingListItems.isNotEmpty) {
+      final payload = pending.shoppingListItems
+          .map((r) => Map<String, dynamic>.from(r)..['user_id'] = newUserId)
+          .toList();
+      await Supabase.instance.client.from('shopping_list_items').insert(payload);
+    }
   }
 
   Future<void> _runAuthAction(Future<String?> Function() action) async {
