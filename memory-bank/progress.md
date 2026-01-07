@@ -6,6 +6,7 @@ Progress snapshot
   - Community search/insight RPCs (`search_community_prices`, `count_nearby_community_prices`, `get_nearby_records_by_category`) with guest/non-Pro gating; personal search by `user_id`.
   - Auth flows: guest/Google/Apple/email, iOS native Sign in with Apple (id token + nonce), guest-to-user merge (identity_already_exists handled), in-app password reset dialog via deep link; login prompt guards community/shopping list.
   - Subscriptions: RevenueCat configured with entitlement `カイログ Pro`, fallback API key, purchase/restore/paywall/Customer Center entry points; `profiles.is_pro` sync for RLS.
+  - Paywall updated to two plans (monthly/annual) with 初回14日無料トライアル copy; added in-app legal documents; smart camera now supports tap-to-focus with a minimal indicator.
   - Shopping list: Japanese-only list UI with add/toggle/delete and swipe-to-delete; backend `shopping_list_items` with user-scoped RLS supports guests via anonymous uid.
   - UI/UX overhaul: premium teal/cream system, animated bottom nav + gradient FAB, glassmorphism category cards, rich empty/error states, product detail sheet with community chips.
   - Places/shops: Nearby store fetch with custom filtering plus Autocomplete + Place Details to capture lat/lng; `LocationRepository` centralizes permission checks, caching, and nearby shop fetch for Add/Edit, Catalog search, Category detail, and product insight sheets. Manual shop names now best-effort attach current GPS coords on save so they participate in nearby cheapest results even without Places selection.
@@ -19,7 +20,7 @@ Progress snapshot
   - Confirm `price_records.user_id` and `tax_rate` columns exist in all environments; backfill null tax_rate to 0.10 and rerun migrations as needed.
   - Ensure Supabase RLS and triggers match production (user_id defaults, guest-to-user transfer function).
   - Deploy/verify `shopping_list_items` table + policies in production and smoke test list CRUD for guests and signed-in users.
-  - Keep RevenueCat package identifiers (`monthly`, `quarterly`, `annual`) aligned with dashboard offerings; run purchase/restore/paywall regression.
+  - Keep RevenueCat package identifiers (`monthly`, `annual`) aligned with dashboard offerings; run purchase/restore/paywall regression.
   - Apple Sign-In ops: Supabase Apple provider must include Services ID + iOS bundle ID in Client IDs, and the client secret JWT needs rotation (max 180 days).
 - Run `flutter analyze` and `flutter test` before release; perform end-to-end capture → save → community search → paywall flows after backend changes.
 

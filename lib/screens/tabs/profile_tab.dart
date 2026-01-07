@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/repositories/price_repository.dart';
 import '../../main.dart';
@@ -140,9 +141,13 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
       if (shouldLogin == true) {
         try {
           await Supabase.instance.client.auth.signOut();
+          final launchMode = Platform.isIOS
+              ? LaunchMode.externalApplication
+              : LaunchMode.platformDefault;
           await Supabase.instance.client.auth.signInWithOAuth(
             provider,
             redirectTo: supabaseRedirectUri,
+            authScreenLaunchMode: launchMode,
           );
           if (!mounted) return;
           _showStatusSnackBar('ブラウザを開きました。Googleアカウントでログインしてください。');
@@ -947,15 +952,20 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
           nonce: credential.rawNonce,
         );
       } else {
+        final launchMode = Platform.isIOS
+            ? LaunchMode.externalApplication
+            : LaunchMode.platformDefault;
         if (_priceRepository.isGuest) {
           await auth.linkIdentity(
             provider,
             redirectTo: supabaseRedirectUri,
+            authScreenLaunchMode: launchMode,
           );
         } else {
           await auth.signInWithOAuth(
             provider,
             redirectTo: supabaseRedirectUri,
+            authScreenLaunchMode: launchMode,
           );
         }
       }

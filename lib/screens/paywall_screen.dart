@@ -5,6 +5,8 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../main.dart';
 import '../providers/subscription_provider.dart';
 import '../widgets/app_snackbar.dart';
+import 'legal/legal_document_screen.dart';
+import 'legal/legal_documents.dart';
 
 class PaywallScreen extends ConsumerStatefulWidget {
   const PaywallScreen({super.key});
@@ -17,7 +19,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
     with SingleTickerProviderStateMixin {
   ProviderSubscription<SubscriptionState>? _sub;
   int _selectedPlanIndex = 1;
-  static const List<String> _packageIds = ['monthly', 'quarterly', 'annual'];
+  static const List<String> _packageIds = ['monthly', 'annual'];
   late AnimationController _shimmerController;
 
   @override
@@ -515,32 +517,32 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
               index: 0,
               duration: '1',
               unit: 'ヶ月',
-              price: '¥350',
-              perMonth: '¥350/月',
+              price: '¥280',
+              perMonth: '¥280/月',
               isSelected: _selectedPlanIndex == 0,
               badge: null,
             ),
             const SizedBox(width: 10),
             _buildPricingCard(
               index: 1,
-              duration: '3',
-              unit: 'ヶ月',
-              price: '¥950',
-              perMonth: '¥317/月',
-              isSelected: _selectedPlanIndex == 1,
-              badge: 'おすすめ',
-            ),
-            const SizedBox(width: 10),
-            _buildPricingCard(
-              index: 2,
               duration: '1',
               unit: '年',
-              price: '¥3,300',
-              perMonth: '¥275/月',
-              isSelected: _selectedPlanIndex == 2,
+              price: '¥2,800',
+              perMonth: '¥233/月',
+              isSelected: _selectedPlanIndex == 1,
               badge: '最安',
             ),
           ],
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          '初回14日無料トライアル',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: KurabeColors.primary,
+          ),
+          textAlign: TextAlign.center,
         ),
       ],
     );
@@ -772,9 +774,13 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _buildLinkButton('利用規約', () => _showTermsDialog(context)),
+            _buildLinkButton('利用規約',
+                () => _openLegalDocument(context, '利用規約', termsOfServiceText)),
             Text(' • ', style: TextStyle(color: Colors.grey.shade400)),
-            _buildLinkButton('プライバシー', () => _showTermsDialog(context)),
+            _buildLinkButton(
+                'プライバシー',
+                () => _openLegalDocument(
+                    context, 'プライバシー', privacyPolicyText)),
           ],
         ),
       ],
@@ -795,23 +801,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
     );
   }
 
-  void _showTermsDialog(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('利用規約 / プライバシー'),
-          content: const Text(
-            'プライバシーポリシーと利用規約の詳細はアプリ内または公式サイトでご確認ください。',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('閉じる'),
-            ),
-          ],
-        );
-      },
+  void _openLegalDocument(BuildContext context, String title, String body) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LegalDocumentScreen(title: title, body: body),
+      ),
     );
   }
 }

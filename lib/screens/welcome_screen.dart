@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart';
 import '../constants/auth.dart';
@@ -496,15 +497,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     await _runAuthAction(() async {
       final auth = Supabase.instance.client.auth;
       final isAnon = _isAnonymousSession(auth.currentSession);
+      final launchMode = Platform.isIOS
+          ? LaunchMode.externalApplication
+          : LaunchMode.platformDefault;
       if (isAnon) {
         await auth.linkIdentity(
           OAuthProvider.google,
           redirectTo: supabaseRedirectUri,
+          authScreenLaunchMode: launchMode,
         );
       } else {
         await auth.signInWithOAuth(
           OAuthProvider.google,
           redirectTo: supabaseRedirectUri,
+          authScreenLaunchMode: launchMode,
         );
       }
       return null;

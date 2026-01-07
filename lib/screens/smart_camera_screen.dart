@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -14,20 +15,68 @@ class SmartCameraScreen extends StatefulWidget {
   State<SmartCameraScreen> createState() => _SmartCameraScreenState();
 }
 
-class _SmartCameraScreenState extends State<SmartCameraScreen> {
+class _SmartCameraScreenState extends State<SmartCameraScreen>
+    with SingleTickerProviderStateMixin {
   CameraController? _controller;
   bool _isCameraReady = false;
   bool _isCapturing = false;
   String? _error;
+  Offset? _focusRingPosition;
+  bool _showFocusRing = false;
+  late final AnimationController _focusRingController;
+  late final Animation<double> _focusRingScale;
+  late final Animation<double> _focusRingOpacity;
+  static const double _focusRingSize = 72;
+  static const Color _focusRingColor = Color(0xFFFFD60A);
 
   @override
   void initState() {
     super.initState();
+    _focusRingController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 640),
+    );
+    _focusRingScale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.06)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.06, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.03)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 20,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.03, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 20,
+      ),
+    ]).animate(_focusRingController);
+    _focusRingOpacity = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 70),
+      TweenSequenceItem(
+        tween:
+            Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 30,
+      ),
+    ]).animate(_focusRingController);
+    _focusRingController.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => _showFocusRing = false);
+      }
+    });
     _initializeCamera();
   }
 
   @override
   void dispose() {
+    _focusRingController.dispose();
     _controller?.dispose();
     super.dispose();
   }
@@ -88,6 +137,37 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
     }
   }
 
+  Future<void> _setFocusPoint(Offset localPosition, Size previewSize) async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    final supportsFocus = controller.value.focusPointSupported;
+    final supportsExposure = controller.value.exposurePointSupported;
+    if (!supportsFocus && !supportsExposure) return;
+
+    final dx = (localPosition.dx / previewSize.width).clamp(0.0, 1.0);
+    final dy = (localPosition.dy / previewSize.height).clamp(0.0, 1.0);
+    final point = Offset(dx, dy);
+
+    try {
+      if (mounted) {
+        setState(() {
+          _focusRingPosition = localPosition;
+          _showFocusRing = true;
+        });
+        _focusRingController.forward(from: 0);
+      }
+      if (supportsExposure) {
+        await controller.setExposurePoint(point);
+      }
+      if (supportsFocus) {
+        await controller.setFocusPoint(point);
+        await controller.setFocusMode(FocusMode.auto);
+      }
+    } catch (e) {
+      debugPrint('[SmartCamera] focus failed: $e');
+    }
+  }
+
   Future<String> _saveCapture(XFile xfile) async {
     final directory = await getApplicationDocumentsDirectory();
     final filename =
@@ -126,8 +206,46 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
               : Stack(
                   fit: StackFit.expand,
                   children: [
-                    CameraPreview(controller),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final size = constraints.biggest;
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTapDown: (details) =>
+                              _setFocusPoint(details.localPosition, size),
+                          child: CameraPreview(controller),
+                        );
+                      },
+                    ),
                     const CameraOverlayGuide(),
+                    if (_showFocusRing && _focusRingPosition != null)
+                      Positioned(
+                        left: _focusRingPosition!.dx - _focusRingSize / 2,
+                        top: _focusRingPosition!.dy - _focusRingSize / 2,
+                        child: IgnorePointer(
+                          child: AnimatedBuilder(
+                            animation: _focusRingController,
+                            builder: (context, child) {
+                              return Opacity(
+                                opacity: _focusRingOpacity.value,
+                                child: Transform.scale(
+                                  scale: _focusRingScale.value,
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: SizedBox(
+                              width: _focusRingSize,
+                              height: _focusRingSize,
+                              child: CustomPaint(
+                                painter: _FocusRingPainter(
+                                  color: _focusRingColor,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     Positioned(
                       bottom: 32,
                       left: 0,
@@ -154,5 +272,41 @@ class _SmartCameraScreenState extends State<SmartCameraScreen> {
                   ],
                 ),
     );
+  }
+}
+
+class _FocusRingPainter extends CustomPainter {
+  _FocusRingPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    const double strokeWidth = 2.0;
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(strokeWidth / 2),
+      const Radius.circular(10),
+    );
+
+    final glowPaint = Paint()
+      ..color = color.withAlpha(90)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6
+      ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 6);
+
+    final borderPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    canvas.drawRRect(rrect, glowPaint);
+    canvas.drawRRect(rrect, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FocusRingPainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }
