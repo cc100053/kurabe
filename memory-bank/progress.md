@@ -2,7 +2,7 @@ Progress snapshot
 
 - Wired up
   - Supabase bootstrap with PKCE auth, price record inserts, storage uploads to `price_tags`, and stream-based timeline for `user_id`.
-  - Add/Edit flow with smart camera, Gemini 1.5 parsing (product/price/discount/category), tax rate inference, two-way tax-exclusive/tax-inclusive price inputs, unit/taxed total display, best-price insight via `get_nearby_cheapest`, and Google Places nearby/autocomplete for shops.
+  - Add/Edit flow with smart camera, Gemini 1.5 parsing (product/price/discount/category), tax rate inference, two-way tax-exclusive/tax-inclusive price inputs (¥ + thousands formatting; debounced cross-field updates), unit/taxed total display, best-price insight via `get_nearby_cheapest`, and Google Places nearby/autocomplete for shops.
   - Community search/insight RPCs (`search_community_prices`, `count_nearby_community_prices`, `get_nearby_records_by_category`) with guest/non-Pro gating; personal search by `user_id`.
   - Auth flows: guest/Google/Apple/email, iOS native Sign in with Apple (id token + nonce), guest-to-user merge (identity_already_exists handled), in-app password reset dialog via deep link; login prompt guards community/shopping list.
   - Subscriptions: RevenueCat configured with entitlement `カイログ Pro`, fallback API key, purchase/restore/paywall/Customer Center entry points; `profiles.is_pro` sync for RLS.
