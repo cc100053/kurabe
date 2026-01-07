@@ -32,6 +32,8 @@ class AddEditState {
     this.productName = '',
     this.shopName = '',
     this.originalPrice = '',
+    this.taxExcludedPrice = '',
+    this.taxIncludedPrice = '',
     this.quantity = '1',
     this.discountType = DiscountType.none,
     this.discountValue = '',
@@ -53,6 +55,8 @@ class AddEditState {
   final String productName;
   final String shopName;
   final String originalPrice;
+  final String taxExcludedPrice;
+  final String taxIncludedPrice;
   final String quantity;
   final DiscountType discountType;
   final String discountValue;
@@ -74,6 +78,8 @@ class AddEditState {
     String? productName,
     String? shopName,
     String? originalPrice,
+    String? taxExcludedPrice,
+    String? taxIncludedPrice,
     String? quantity,
     DiscountType? discountType,
     String? discountValue,
@@ -95,6 +101,8 @@ class AddEditState {
       productName: productName ?? this.productName,
       shopName: shopName ?? this.shopName,
       originalPrice: originalPrice ?? this.originalPrice,
+      taxExcludedPrice: taxExcludedPrice ?? this.taxExcludedPrice,
+      taxIncludedPrice: taxIncludedPrice ?? this.taxIncludedPrice,
       quantity: quantity ?? this.quantity,
       discountType: discountType ?? this.discountType,
       discountValue: discountValue ?? this.discountValue,

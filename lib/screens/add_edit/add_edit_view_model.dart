@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../constants/categories.dart';
 import '../../domain/price/discount_type.dart';
+import '../../domain/price/price_calculator.dart';
 import '../../domain/usecases/analyze_price_tag_use_case.dart';
 import '../../domain/usecases/save_price_record_use_case.dart';
 import '../../services/google_places_service.dart';
@@ -14,12 +15,15 @@ import 'add_edit_state.dart';
 
 class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
   Timer? _suggestionDebounce;
+  Timer? _taxPriceDebounce;
   int _suggestionRequestId = 0;
+  static const PriceCalculator _calculator = PriceCalculator();
 
   @override
   AddEditState build() {
     ref.onDispose(() {
       _suggestionDebounce?.cancel();
+      _taxPriceDebounce?.cancel();
     });
     return const AddEditState();
   }
@@ -32,9 +36,29 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
   }
 
   void updateOriginalPrice(String value) {
-    state = state.copyWith(originalPrice: value);
+    // Backward compatible: treat this as tax-exclusive input.
+    updateTaxExcludedPrice(value);
+  }
+
+  void updateTaxExcludedPrice(String value) {
+    state = state.copyWith(
+      originalPrice: value,
+      taxExcludedPrice: value,
+      isTaxIncluded: false,
+    );
     _recalculatePrice();
+    _scheduleTaxPriceSync();
     
+  }
+
+  void updateTaxIncludedPrice(String value) {
+    state = state.copyWith(
+      originalPrice: value,
+      taxIncludedPrice: value,
+      isTaxIncluded: true,
+    );
+    _recalculatePrice();
+    _scheduleTaxPriceSync();
   }
 
   void updateQuantity(String value) {
@@ -66,12 +90,14 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
   void toggleTaxIncluded() {
     state = state.copyWith(isTaxIncluded: !state.isTaxIncluded);
     _recalculatePrice();
+    _scheduleTaxPriceSync();
     
   }
 
   void setTaxRate(double rate) {
     state = state.copyWith(taxRate: rate);
     _recalculatePrice();
+    _scheduleTaxPriceSync(immediate: true);
     
   }
 
@@ -80,6 +106,7 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
     final taxRate = _taxRateForCategory(normalized);
     state = state.copyWith(category: normalized, taxRate: taxRate);
     _recalculatePrice();
+    _scheduleTaxPriceSync(immediate: true);
     
   }
 
@@ -136,6 +163,8 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
     state = state.copyWith(
       imageFile: file,
       originalPrice: '',
+      taxExcludedPrice: '',
+      taxIncludedPrice: '',
       quantity: '1',
       discountValue: '',
       discountType: DiscountType.none,
@@ -148,6 +177,7 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
       suggestionChips: const [],
     );
     _recalculatePrice();
+    _scheduleTaxPriceSync(immediate: true);
     try {
       final result = await useCase(file);
       _applyScanResult(result);
@@ -243,6 +273,10 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
       originalPrice: result.rawPrice != null
           ? result.rawPrice!.round().toString()
           : state.originalPrice,
+      taxExcludedPrice: result.rawPrice != null
+          ? result.rawPrice!.round().toString()
+          : state.taxExcludedPrice,
+      taxIncludedPrice: state.taxIncludedPrice,
       discountType: result.discountType,
       discountValue: result.discountValue?.toString() ?? state.discountValue,
       priceType: _normalizePriceType(result.priceType ?? state.priceType),
@@ -251,8 +285,50 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
       isTaxIncluded: false,
     );
     _recalculatePrice();
+    _scheduleTaxPriceSync(immediate: true);
     _fetchSuggestions();
     
+  }
+
+  void _scheduleTaxPriceSync({bool immediate = false}) {
+    _taxPriceDebounce?.cancel();
+    if (immediate) {
+      _syncTaxPriceFields();
+      return;
+    }
+    _taxPriceDebounce = Timer(
+      const Duration(milliseconds: 300),
+      _syncTaxPriceFields,
+    );
+  }
+
+  void _syncTaxPriceFields() {
+    final value = _parseCurrency(state.originalPrice);
+    if (value == null) {
+      state = state.copyWith(
+        taxExcludedPrice: state.isTaxIncluded ? '' : state.taxExcludedPrice,
+        taxIncludedPrice: state.isTaxIncluded ? state.taxIncludedPrice : '',
+      );
+      return;
+    }
+
+    if (state.isTaxIncluded) {
+      final excluded = _calculator.taxExcludedFromIncluded(
+        priceIncludingTax: value,
+        taxRate: state.taxRate,
+      );
+      state = state.copyWith(
+        taxExcludedPrice: excluded == null ? '' : excluded.toStringAsFixed(0),
+      );
+    } else {
+      final included = _calculator.taxIncludedFromExcluded(
+        priceExcludingTax: value,
+        taxRate: state.taxRate,
+      );
+      state = state.copyWith(
+        taxIncludedPrice: included == null ? '' : included.toStringAsFixed(0),
+      );
+    }
   }
 
   void _recalculatePrice() {

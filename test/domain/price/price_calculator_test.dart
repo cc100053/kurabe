@@ -102,4 +102,58 @@ void main() {
       expect(calculator.compareUnitPrices(110, 100), 1);
     });
   });
+
+  group('tax conversions', () {
+    test('taxIncludedFromExcluded floors correctly (10%)', () {
+      expect(
+        calculator.taxIncludedFromExcluded(priceExcludingTax: 100, taxRate: 0.10),
+        110,
+      );
+      expect(
+        calculator.taxIncludedFromExcluded(priceExcludingTax: 101, taxRate: 0.10),
+        111,
+      );
+    });
+
+    test('taxExcludedFromIncluded ceils to preserve round-trip (10%)', () {
+      final excluded = calculator.taxExcludedFromIncluded(
+        priceIncludingTax: 111,
+        taxRate: 0.10,
+      );
+      expect(excluded, 101);
+      expect(
+        calculator.taxIncludedFromExcluded(
+          priceExcludingTax: excluded,
+          taxRate: 0.10,
+        ),
+        111,
+      );
+    });
+
+    test('taxExcludedFromIncluded ceils to preserve round-trip (8%)', () {
+      final excluded = calculator.taxExcludedFromIncluded(
+        priceIncludingTax: 108,
+        taxRate: 0.08,
+      );
+      expect(excluded, 100);
+      expect(
+        calculator.taxIncludedFromExcluded(
+          priceExcludingTax: excluded,
+          taxRate: 0.08,
+        ),
+        108,
+      );
+    });
+
+    test('returns null when price is null', () {
+      expect(
+        calculator.taxIncludedFromExcluded(priceExcludingTax: null, taxRate: 0.10),
+        isNull,
+      );
+      expect(
+        calculator.taxExcludedFromIncluded(priceIncludingTax: null, taxRate: 0.10),
+        isNull,
+      );
+    });
+  });
 }

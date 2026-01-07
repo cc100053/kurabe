@@ -2,11 +2,36 @@ class PriceCalculator {
   const PriceCalculator();
 
   static const double _epsilon = 1e-6;
+  static const double _taxEpsilon = 1e-9;
 
   /// Returns a normalized quantity to avoid division by zero.
   double normalizedQuantity(double? quantity) {
     if (quantity == null || quantity <= 0) return 1;
     return quantity;
+  }
+
+  /// Converts a tax-exclusive price to a tax-inclusive price using floor rounding
+  /// (typical for Japanese POS price display).
+  double? taxIncludedFromExcluded({
+    required double? priceExcludingTax,
+    required double taxRate,
+  }) {
+    if (priceExcludingTax == null) return null;
+    return (priceExcludingTax * (1 + taxRate)).floorToDouble();
+  }
+
+  /// Converts a tax-inclusive price to a tax-exclusive price.
+  ///
+  /// This uses ceil rounding so that when the returned value is converted back
+  /// via [taxIncludedFromExcluded] it matches the original tax-inclusive input
+  /// under floor rounding.
+  double? taxExcludedFromIncluded({
+    required double? priceIncludingTax,
+    required double taxRate,
+  }) {
+    if (priceIncludingTax == null) return null;
+    final raw = priceIncludingTax / (1 + taxRate);
+    return (raw - _taxEpsilon).ceilToDouble();
   }
 
   /// Computes unit price (price per quantity). Returns null when price is null.

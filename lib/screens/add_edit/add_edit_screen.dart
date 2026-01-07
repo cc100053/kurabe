@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -36,8 +38,12 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
   static const String _manualInputSentinel = '__manual_shop_input__';
 
   late final String _placesApiKey;
+  late final NumberFormat _yenNumberFormat;
   final _productController = TextEditingController();
-  final _originalPriceController = TextEditingController();
+  final _taxExcludedPriceController = TextEditingController();
+  final _taxIncludedPriceController = TextEditingController();
+  final _taxExcludedFocusNode = FocusNode();
+  final _taxIncludedFocusNode = FocusNode();
   final _quantityController = TextEditingController();
   final _discountValueController = TextEditingController();
   final _shopController = TextEditingController();
@@ -56,6 +62,9 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
   void initState() {
     super.initState();
     _placesApiKey = ref.read(appConfigProvider).googlePlacesApiKey ?? '';
+    _yenNumberFormat = NumberFormat.decimalPattern('ja_JP');
+    _taxExcludedFocusNode.addListener(_handleTaxExcludedFocusChange);
+    _taxIncludedFocusNode.addListener(_handleTaxIncludedFocusChange);
     _syncControllers(ref.read(addEditViewModelProvider));
 
     _stateSubscription = ref.listenManual<AddEditState>(
@@ -92,7 +101,14 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
   @override
   void dispose() {
     _productController.dispose();
-    _originalPriceController.dispose();
+    _taxExcludedPriceController.dispose();
+    _taxIncludedPriceController.dispose();
+    _taxExcludedFocusNode
+      ..removeListener(_handleTaxExcludedFocusChange)
+      ..dispose();
+    _taxIncludedFocusNode
+      ..removeListener(_handleTaxIncludedFocusChange)
+      ..dispose();
     _quantityController.dispose();
     _discountValueController.dispose();
     _shopController.dispose();
@@ -105,10 +121,29 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
 
   void _syncControllers(AddEditState state) {
     _syncController(_productController, state.productName);
-    _syncController(_originalPriceController, state.originalPrice);
+    _syncPriceController(
+      controller: _taxExcludedPriceController,
+      focusNode: _taxExcludedFocusNode,
+      rawValue: state.taxExcludedPrice,
+    );
+    _syncPriceController(
+      controller: _taxIncludedPriceController,
+      focusNode: _taxIncludedFocusNode,
+      rawValue: state.taxIncludedPrice,
+    );
     _syncController(_quantityController, state.quantity);
     _syncController(_discountValueController, state.discountValue);
     _syncController(_shopController, state.shopName);
+  }
+
+  void _syncPriceController({
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required String rawValue,
+  }) {
+    if (focusNode.hasFocus) return;
+    final display = _formatYenDigits(rawValue);
+    _syncController(controller, display);
   }
 
   void _syncController(TextEditingController controller, String value) {
@@ -117,6 +152,47 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
       text: value,
       selection: TextSelection.collapsed(offset: value.length),
     );
+  }
+
+  void _handleTaxExcludedFocusChange() {
+    if (_taxExcludedFocusNode.hasFocus) {
+      _syncController(
+        _taxExcludedPriceController,
+        _stripToDigits(_taxExcludedPriceController.text),
+      );
+    } else {
+      _syncController(
+        _taxExcludedPriceController,
+        _formatYenDigits(_taxExcludedPriceController.text),
+      );
+    }
+  }
+
+  void _handleTaxIncludedFocusChange() {
+    if (_taxIncludedFocusNode.hasFocus) {
+      _syncController(
+        _taxIncludedPriceController,
+        _stripToDigits(_taxIncludedPriceController.text),
+      );
+    } else {
+      _syncController(
+        _taxIncludedPriceController,
+        _formatYenDigits(_taxIncludedPriceController.text),
+      );
+    }
+  }
+
+  String _stripToDigits(String input) {
+    final digits = input.replaceAll(RegExp(r'[^0-9]'), '');
+    return digits;
+  }
+
+  String _formatYenDigits(String input) {
+    final digits = _stripToDigits(input);
+    if (digits.isEmpty) return '';
+    final value = int.tryParse(digits);
+    if (value == null) return digits;
+    return _yenNumberFormat.format(value);
   }
 
   Future<void> _handleImageTap() async {
@@ -458,14 +534,38 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
               ),
             ],
             const SizedBox(height: 8),
-            TextField(
-              controller: _originalPriceController,
-              decoration: const InputDecoration(
-                labelText: '元の価格',
-                isDense: true,
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: viewModel.updateOriginalPrice,
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _taxExcludedPriceController,
+                    focusNode: _taxExcludedFocusNode,
+                    decoration: const InputDecoration(
+                      labelText: '税抜価格',
+                      prefixText: '¥',
+                      isDense: true,
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: viewModel.updateTaxExcludedPrice,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _taxIncludedPriceController,
+                    focusNode: _taxIncludedFocusNode,
+                    decoration: const InputDecoration(
+                      labelText: '税込価格',
+                      prefixText: '¥',
+                      isDense: true,
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: viewModel.updateTaxIncludedPrice,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Row(
@@ -493,9 +593,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
             ),
             const SizedBox(height: 8),
             _AddEditTaxControls(
-              isTaxIncluded: state.isTaxIncluded,
               taxRate: state.taxRate,
-              onToggleIncluded: viewModel.toggleTaxIncluded,
               onToggleRate: () {
                 final is8Percent = state.taxRate == 0.08;
                 viewModel.setTaxRate(is8Percent ? 0.10 : 0.08);
@@ -909,15 +1007,11 @@ class _AddEditSuggestionChips extends StatelessWidget {
 
 class _AddEditTaxControls extends StatelessWidget {
   const _AddEditTaxControls({
-    required this.isTaxIncluded,
     required this.taxRate,
-    required this.onToggleIncluded,
     required this.onToggleRate,
   });
 
-  final bool isTaxIncluded;
   final double taxRate;
-  final VoidCallback onToggleIncluded;
   final VoidCallback onToggleRate;
 
   @override
@@ -929,11 +1023,6 @@ class _AddEditTaxControls extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
         ),
         const SizedBox(width: 8),
-        _AddEditTaxIncludedToggle(
-          isTaxIncluded: isTaxIncluded,
-          onTap: onToggleIncluded,
-        ),
-        const SizedBox(width: 8),
         Expanded(
           child: _AddEditTaxRateToggle(
             taxRate: taxRate,
@@ -941,93 +1030,6 @@ class _AddEditTaxControls extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _AddEditTaxIncludedToggle extends StatelessWidget {
-  const _AddEditTaxIncludedToggle({
-    required this.isTaxIncluded,
-    required this.onTap,
-  });
-
-  final bool isTaxIncluded;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 100,
-        height: 34,
-        decoration: BoxDecoration(
-          color: KurabeColors.border,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Stack(
-          children: [
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              left: isTaxIncluded ? 2 : null,
-              right: isTaxIncluded ? null : 2,
-              top: 2,
-              bottom: 2,
-              width: 48,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: KurabeColors.primary,
-                  borderRadius: BorderRadius.circular(6),
-                  boxShadow: [
-                    BoxShadow(
-                      color: KurabeColors.primary.withAlpha(50),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  child: Center(
-                    child: AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 200),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight:
-                            isTaxIncluded ? FontWeight.w700 : FontWeight.w500,
-                        color: isTaxIncluded
-                            ? Colors.white
-                            : KurabeColors.textSecondary,
-                      ),
-                      child: const Text('税込'),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Center(
-                    child: AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 200),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight:
-                            !isTaxIncluded ? FontWeight.w700 : FontWeight.w500,
-                        color: !isTaxIncluded
-                            ? Colors.white
-                            : KurabeColors.textSecondary,
-                      ),
-                      child: const Text('税抜'),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
