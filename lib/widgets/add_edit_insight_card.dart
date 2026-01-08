@@ -46,7 +46,9 @@ class AddEditInsightCard extends StatelessWidget {
           icon = Icons.emoji_events;
           iconColor = Colors.amber.shade700;
           bgColor = Colors.amber.shade100;
-          title = '周辺最安値！';
+          title = (!isPro && insight.gatedMessage != null)
+              ? '周辺に記録があります'
+              : '周辺最安値！';
           if (insight.gatedMessage != null) {
             subtitle = insight.gatedMessage;
           } else if (insight.price != null && insight.shop != null) {
@@ -62,7 +64,9 @@ class AddEditInsightCard extends StatelessWidget {
           icon = Icons.local_offer;
           iconColor = KurabeColors.success;
           bgColor = KurabeColors.success.withAlpha(20);
-          title = '周辺に似た記録があります';
+          title = (!isPro && insight.gatedMessage != null)
+              ? '周辺に記録があります'
+              : 'より安い価格を発見！';
           if (insight.gatedMessage != null) {
             subtitle = insight.gatedMessage;
           } else if (isPro) {

@@ -7,6 +7,7 @@ Progress snapshot
   - Auth flows: guest/Google/Apple/email, iOS native Sign in with Apple (id token + nonce), guest-to-user merge (identity_already_exists handled), in-app password reset dialog via deep link; login prompt guards community/shopping list.
   - Subscriptions: RevenueCat configured with entitlement `カイログ Pro`, fallback API key, purchase/restore/paywall/Customer Center entry points; `profiles.is_pro` sync for RLS.
   - Paywall updated to two plans (monthly/annual) with 初回14日無料トライアル copy; added in-app legal documents; smart camera now supports tap-to-focus with a minimal indicator.
+  - 統一設定: 周辺比較/最安値判定の期間を14日に統一し、距離も3kmに揃えた。
   - Shopping list: Japanese-only list UI with add/toggle/delete and swipe-to-delete; backend `shopping_list_items` with user-scoped RLS supports guests via anonymous uid.
   - UI/UX overhaul: premium teal/cream system, animated bottom nav + gradient FAB, glassmorphism category cards, rich empty/error states, product detail sheet with community chips.
   - Places/shops: Nearby store fetch with custom filtering plus Autocomplete + Place Details to capture lat/lng; `LocationRepository` centralizes permission checks, caching, and nearby shop fetch for Add/Edit, Catalog search, Category detail, and product insight sheets. Manual shop names now best-effort attach current GPS coords on save so they participate in nearby cheapest results even without Places selection.

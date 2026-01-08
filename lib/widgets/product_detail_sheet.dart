@@ -112,7 +112,7 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
         lat: position.latitude,
         lng: position.longitude,
         radiusMeters: _communityRadiusMeters,
-        recentDays: 7, // Cover "5 days ago" items safely
+        recentDays: 14,
       );
       debugPrint(
         '[インサイト] Supabase結果 lat=${position.latitude}, lng=${position.longitude} -> ${result != null ? 'hit' : 'empty'}',

@@ -50,8 +50,8 @@ class PriceRepository {
         productName: productName,
         lat: payload.shopLat!,
         lng: payload.shopLng!,
-        radiusMeters: 2000,
-        recentDays: 5,
+        radiusMeters: 3000,
+        recentDays: 14,
       );
       final comparisonUnit = nearbyCheapest?.effectiveUnitPrice;
       isBestPrice = _calculator.isBetterOrEqualUnitPrice(
@@ -72,8 +72,8 @@ class PriceRepository {
     required String productName,
     required double lat,
     required double lng,
-    int radiusMeters = 2000,
-    int recentDays = 5,
+    int radiusMeters = 3000,
+    int recentDays = 14,
   }) async {
     if (productName.trim().isEmpty) return null;
     final raw = await _remote.getNearbyCheapestRaw(

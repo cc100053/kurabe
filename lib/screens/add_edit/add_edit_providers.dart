@@ -102,12 +102,17 @@ final communityInsightProvider =
     var cancelled = false;
     ref.onDispose(() => cancelled = true);
 
-    final productName =
-        request.productName.replaceAll(RegExp(r'[\s\u3000]+'), '');
-    if (productName.isEmpty || request.finalTaxedTotal == null) {
+    final rawProductName = request.productName.trim();
+    if (rawProductName.isEmpty || request.finalTaxedTotal == null) {
       return AddEditInsight.idle;
     }
     if (request.apiKey.isEmpty) return AddEditInsight.idle;
+    final compactProductName =
+        rawProductName.replaceAll(RegExp(r'[\s\u3000]+'), '');
+    final candidateNames = <String>[
+      rawProductName,
+      if (compactProductName != rawProductName) compactProductName,
+    ];
 
     // Debounce to avoid rapid refetch while the user is typing.
     await Future<void>.delayed(const Duration(milliseconds: 500));
@@ -133,14 +138,18 @@ final communityInsightProvider =
     );
     PriceRecordModel? cheapest;
     try {
-      cheapest = await repository
-          .getNearbyCheapest(
-            productName: productName,
-            lat: coords.$1,
-            lng: coords.$2,
+      for (final candidate in candidateNames) {
+        cheapest = await repository
+            .getNearbyCheapest(
+              productName: candidate,
+              lat: coords.$1,
+              lng: coords.$2,
             radiusMeters: _insightRadiusMeters,
-          )
-          .timeout(const Duration(seconds: 6));
+            recentDays: 14,
+            )
+            .timeout(const Duration(seconds: 6));
+        if (cheapest != null) break;
+      }
     } on TimeoutException {
       return AddEditInsight.none;
     }
@@ -148,20 +157,24 @@ final communityInsightProvider =
     if (cheapest == null) {
       if (!request.isPro) {
         try {
-          final count = await repository
-              .countCommunityPrices(
-                productName,
-                coords.$1,
-                coords.$2,
-                limit: 3,
-              )
-              .timeout(const Duration(seconds: 6));
+          var count = 0;
+          for (final candidate in candidateNames) {
+            count = await repository
+                .countCommunityPrices(
+                  candidate,
+                  coords.$1,
+                  coords.$2,
+                  limit: 3,
+                )
+                .timeout(const Duration(seconds: 6));
+            if (count > 0) break;
+          }
           if (cancelled) return AddEditInsight.idle;
           if (count > 0) {
             return const AddEditInsight(
               status: InsightStatus.found,
               gated: true,
-              gatedMessage: '周辺に記録があります。Proで店舗と価格を表示。',
+              gatedMessage: '周辺に記録があります。Proで詳細を確認。',
             );
           }
         } catch (_) {
@@ -193,13 +206,13 @@ final communityInsightProvider =
         return const AddEditInsight(
           status: InsightStatus.best,
           gated: true,
-          gatedMessage: '周辺最安値です。Proで詳細を確認。',
+          gatedMessage: '周辺に記録があります。Proで詳細を確認。',
         );
       }
       return const AddEditInsight(
         status: InsightStatus.found,
         gated: true,
-        gatedMessage: '周辺に安い店舗があります。Proで店舗と価格を表示。',
+        gatedMessage: '周辺に記録があります。Proで詳細を確認。',
       );
     }
 

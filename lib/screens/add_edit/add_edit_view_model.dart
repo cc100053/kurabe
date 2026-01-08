@@ -17,6 +17,7 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
   Timer? _suggestionDebounce;
   Timer? _taxPriceDebounce;
   int _suggestionRequestId = 0;
+  String? _lastSuggestionQuery;
   static const PriceCalculator _calculator = PriceCalculator();
 
   @override
@@ -30,9 +31,7 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
 
   void updateProductName(String value) {
     state = state.copyWith(productName: value);
-    _recalculatePrice();
     _debounceSuggestions();
-    
   }
 
   void updateOriginalPrice(String value) {
@@ -234,14 +233,17 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
 
   Future<void> _fetchSuggestions() async {
     final normalizedQuery = _normalizeName(state.productName);
-    if (normalizedQuery.isEmpty) {
+    if (normalizedQuery.isEmpty || normalizedQuery.length < 2) {
+      _lastSuggestionQuery = null;
       state = state.copyWith(suggestionChips: const []);
       return;
     }
+    if (_lastSuggestionQuery == normalizedQuery) return;
     final repository = ref.read(priceRepositoryProvider);
     final requestId = ++_suggestionRequestId;
     final suggestions = await repository.searchProductNames(normalizedQuery);
     if (requestId != _suggestionRequestId) return;
+    _lastSuggestionQuery = normalizedQuery;
     final display = <String>[];
     for (final s in suggestions) {
       if (_normalizeName(s).toLowerCase() == normalizedQuery.toLowerCase())
@@ -255,7 +257,7 @@ class AddEditViewModel extends AutoDisposeNotifier<AddEditState> {
   void _debounceSuggestions() {
     _suggestionDebounce?.cancel();
     _suggestionDebounce = Timer(
-      const Duration(milliseconds: 250),
+      const Duration(milliseconds: 400),
       _fetchSuggestions,
     );
   }

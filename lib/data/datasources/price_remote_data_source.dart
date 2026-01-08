@@ -65,8 +65,8 @@ class PriceRemoteDataSource {
     required String productName,
     required double lat,
     required double lng,
-    int radiusMeters = 2000,
-    int recentDays = 5,
+    int radiusMeters = 3000,
+    int recentDays = 14,
   }) async {
     try {
       final result = await _client.rpc(
