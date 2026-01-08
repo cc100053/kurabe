@@ -13,10 +13,10 @@ class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
 
   @override
-  State<MainScaffold> createState() => _MainScaffoldState();
+  State<MainScaffold> createState() => MainScaffoldState();
 }
 
-class _MainScaffoldState extends State<MainScaffold>
+class MainScaffoldState extends State<MainScaffold>
     with SingleTickerProviderStateMixin {
   final GlobalKey<ProfileTabState> _profileTabKey =
       GlobalKey<ProfileTabState>();
@@ -57,6 +57,14 @@ class _MainScaffoldState extends State<MainScaffold>
     }
     setState(() => _currentIndex = index);
   }
+
+  void switchToTab(int index) {
+    if (!mounted) return;
+    if (index < 0 || index >= _tabs.length) return;
+    _onNavTap(index);
+  }
+
+  void switchToProfileTab() => switchToTab(3);
 
   @override
   Widget build(BuildContext context) {

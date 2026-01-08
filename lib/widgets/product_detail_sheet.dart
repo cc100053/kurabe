@@ -11,7 +11,9 @@ import '../data/repositories/price_repository.dart';
 import '../domain/price/price_calculator.dart';
 import '../services/location_service.dart';
 import '../providers/subscription_provider.dart';
+import '../main.dart';
 import '../screens/paywall_screen.dart';
+import '../widgets/app_snackbar.dart';
 
 class ProductDetailSheet extends ConsumerStatefulWidget {
   const ProductDetailSheet({super.key, required this.record});
@@ -577,15 +579,27 @@ class _ProductDetailSheetState extends ConsumerState<ProductDetailSheet> {
           ),
           const SizedBox(height: 10),
           ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PaywallScreen()),
-              );
-            },
+            onPressed: _handlePaywallTap,
             child: const Text('詳細を見るにはロック解除'),
           ),
         ],
       ),
+    );
+  }
+
+  void _handlePaywallTap() {
+    if (_isGuest) {
+      AppSnackbar.show(
+        context,
+        'ゲストは購入できません。先にログインしてください。',
+        isError: true,
+      );
+      mainScaffoldKey.currentState?.switchToProfileTab();
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PaywallScreen()),
     );
   }
 

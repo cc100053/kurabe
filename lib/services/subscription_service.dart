@@ -106,24 +106,31 @@ class SubscriptionService {
   }
 
   Future<bool> purchaseMonthly() async {
-    return purchasePackage('monthly');
+    return purchasePackage('Promonthly');
   }
 
   Future<bool> purchasePackage(String packageId) async {
+    debugPrint('[SubscriptionService] purchasePackage called with: $packageId');
     final userId = _client.auth.currentUser?.id;
     if (userId == null) {
+      debugPrint('[SubscriptionService] Error: No user ID');
       throw SubscriptionException('ログイン後に購入してください。');
     }
     if (!_configured) {
+      debugPrint('[SubscriptionService] Not configured, attempting configure...');
       final configured = await configure();
       if (!configured) {
+        debugPrint('[SubscriptionService] Configure failed: $_lastError');
         throw SubscriptionException(
           _lastError ?? 'RevenueCat を初期化できませんでした。',
         );
       }
     }
+    debugPrint('[SubscriptionService] Fetching offerings...');
     final offerings = await Purchases.getOfferings();
+    debugPrint('[SubscriptionService] Current offering: ${offerings.current?.identifier}');
     final available = offerings.current?.availablePackages ?? [];
+    debugPrint('[SubscriptionService] Available packages: ${available.map((p) => '${p.identifier}(${p.packageType})').toList()}');
     // Try matching by identifier, then by packageType name, then fall back to monthly/first.
     Package? package;
     try {
@@ -132,28 +139,36 @@ class SubscriptionService {
             p.identifier == packageId ||
             p.packageType.name.toLowerCase() == packageId.toLowerCase(),
       );
+      debugPrint('[SubscriptionService] Found package by ID/type match: ${package.identifier}');
     } catch (_) {
+      debugPrint('[SubscriptionService] No exact match for $packageId');
       package = null;
     }
     if (package == null) {
       try {
         package = available.firstWhere(
-          (p) => p.packageType == PackageType.monthly,
+          (p) => p.packageType == PackageType.monthly || p.identifier == 'Promonthly',
         );
+        debugPrint('[SubscriptionService] Found fallback monthly package: ${package.identifier}');
       } catch (_) {
+        debugPrint('[SubscriptionService] No monthly fallback found');
         package = null;
       }
     }
     if (package == null && available.isNotEmpty) {
       package = available.first;
+      debugPrint('[SubscriptionService] Using first available package: ${package.identifier}');
     }
     package ??= offerings.current?.monthly;
     if (package == null) {
+      debugPrint('[SubscriptionService] Error: No package found at all!');
       throw SubscriptionException('購入可能なプランが見つかりません。');
     }
+    debugPrint('[SubscriptionService] Attempting purchase of: ${package.identifier} (${package.storeProduct.identifier})');
     final result = await Purchases.purchase(
       PurchaseParams.package(package),
     );
+    debugPrint('[SubscriptionService] Purchase completed, syncing customer info...');
     return _syncFromCustomerInfo(result.customerInfo);
   }
 

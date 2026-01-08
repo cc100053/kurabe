@@ -51,7 +51,10 @@ app.*.map.json
 .env
 *.p8
 AuthKey_*.p8
+tool/*.p8
+tool/AuthKey_*.p8
 
 # notes
 db.md
 ai.md
+information/

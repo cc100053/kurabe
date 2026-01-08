@@ -19,7 +19,7 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
     with SingleTickerProviderStateMixin {
   ProviderSubscription<SubscriptionState>? _sub;
   int _selectedPlanIndex = 1;
-  static const List<String> _packageIds = ['monthly', 'annual'];
+  static const List<String> _packageIds = ['Promonthly', 'Proannual'];
   late AnimationController _shimmerController;
 
   @override

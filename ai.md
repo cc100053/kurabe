@@ -64,11 +64,23 @@
   - RevenueCat 會自動讀取 Apple 的試用設定，不需要 RC 另外設定。
   - 你個 app 想顯示「30 日試用」字樣，就可喺 paywall 文案補上（可選）。
 
-係paywall 最底嘅利用規約,Privacy 依家係空白嘅, 根據我呢一個APP,幫我加上真正嘅文檔
-用日文寫
-運營者: CHIANG CHI NAM
-聯絡電郵: cc100053@gmail.com
-生效日期: 2026-1-1
-適用法域: 日本
-會收集/使用嘅資料: 地理位置，所上傳嘅圖片
-日文
+修復一個bug, Guest user 撳入pay wall嘅button,會有錯誤發生, 所以我想修改guest user撳入pay wall嘅button，會跳轉去profile page並提示佢guest 無法購買,要先log in。
+
+flutter: [SubscriptionService] purchasePackage called with: Promonthly
+flutter: [SubscriptionService] Fetching offerings...
+DEBUG: ℹ️ No cached Offerings, fetching from network
+DEBUG: ℹ️ Offerings cache is stale, updating from network in foreground
+DEBUG: ℹ️ GetOfferingsOperation: Started
+DEBUG: ℹ️ There are no requests currently running, starting request GET /v1/subscribers/599cfe49-d128-4855-9828-f596a67f6e96/offerings
+DEBUG: ℹ️ API request started: GET '/v1/subscribers/599cfe49-d128-4855-9828-f596a67f6e96/offerings'
+DEBUG: ℹ️ API request completed: GET '/v1/subscribers/599cfe49-d128-4855-9828-f596a67f6e96/offerings' (304)
+DEBUG: ℹ️ No existing products cached, starting store products request for: ["Proannual", "Promonthly"]
+DEBUG: ℹ️ GetOfferingsOperation: Finished
+DEBUG: ℹ️ Serial request done: GET /v1/subscribers/599cfe49-d128-4855-9828-f596a67f6e96/offerings, 0 requests left in the queue
+DEBUG: 😻 Store products request received response
+DEBUG: ℹ️ Store products request finished
+ERROR: 🍎‼️ Error fetching offerings - The operation couldn’t be completed. (RevenueCat.OfferingsManager.Error error 1.)
+There's a problem with your configuration. None of the products registered in the RevenueCat dashboard could be fetched from App Store Connect (or the StoreKit Configuration file if one is being used). 
+More information: https://rev.cat/why-are-offerings-empty
+ERROR: 😿‼️ There is an issue with your configuration. Check the underlying error for more details. There's a problem with your configuration. None of the products registered in the RevenueCat dashboard could be fetched from App Store Connect (or the StoreKit Configuration file if one is being used). 
+More information: https://rev.cat/why-are-offerings-empty

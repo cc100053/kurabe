@@ -11,6 +11,7 @@ import '../main.dart';
 import '../providers/subscription_provider.dart';
 import '../services/location_service.dart';
 import '../screens/paywall_screen.dart';
+import '../widgets/app_snackbar.dart';
 import '../widgets/price_record_tile.dart';
 
 enum _CategoryView { mine, community }
@@ -491,55 +492,61 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   Widget _buildCommunityRecords() {
     _communityFuture ??= _fetchCommunityRecords();
     if (_guestBlocked) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: KurabeColors.primary.withAlpha(26),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  PhosphorIcons.lock(PhosphorIconsStyle.duotone),
-                  size: 48,
-                  color: KurabeColors.primary,
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+          final minHeight = (constraints.maxHeight - bottomInset)
+              .clamp(0.0, double.infinity);
+          return SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(32, 32, 32, bottomInset + 24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: minHeight),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: KurabeColors.primary.withAlpha(26),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        PhosphorIcons.lock(PhosphorIconsStyle.duotone),
+                        size: 48,
+                        color: KurabeColors.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'コミュニティ価格はPro限定です',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        color: KurabeColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'アップグレードして近隣の最安値を確認しましょう。',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: KurabeColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    ElevatedButton(
+                      onPressed: _handlePaywallTap,
+                      child: const Text('詳細を見るにはロック解除'),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              const Text(
-                'コミュニティ価格はPro限定です',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
-                  color: KurabeColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'アップグレードして近隣の最安値を確認しましょう。',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: KurabeColors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 18),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const PaywallScreen()),
-                  );
-                },
-                child: const Text('詳細を見るにはロック解除'),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       );
     }
     if (_locationError != null) {
@@ -603,6 +610,22 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           );
         },
       ),
+    );
+  }
+
+  void _handlePaywallTap() {
+    if (_priceRepository.isGuest) {
+      AppSnackbar.show(
+        context,
+        'ゲストは購入できません。先にログインしてください。',
+        isError: true,
+      );
+      mainScaffoldKey.currentState?.switchToProfileTab();
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PaywallScreen()),
     );
   }
 

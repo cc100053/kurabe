@@ -10,6 +10,9 @@ import 'data/config/app_config.dart';
 import 'screens/main_scaffold.dart';
 import 'screens/welcome_screen.dart';
 
+final GlobalKey<MainScaffoldState> mainScaffoldKey =
+    GlobalKey<MainScaffoldState>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _loadEnv();
@@ -118,7 +121,7 @@ class _KurabeAppState extends State<KurabeApp> {
             });
           }
           final session = Supabase.instance.client.auth.currentSession;
-          if (session != null) return const MainScaffold();
+          if (session != null) return MainScaffold(key: mainScaffoldKey);
           return const WelcomeScreen();
         },
       ),

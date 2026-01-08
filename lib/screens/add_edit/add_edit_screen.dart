@@ -12,11 +12,13 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../constants/categories.dart';
 import '../../constants/category_visuals.dart';
 import '../../data/config/app_config.dart';
+import '../../data/repositories/price_repository.dart';
 import '../../domain/price/discount_type.dart';
 import '../../main.dart';
 import '../../providers/subscription_provider.dart';
 import '../../services/google_places_service.dart';
 import '../../services/location_service.dart';
+import '../../widgets/app_snackbar.dart';
 import '../../widgets/add_edit_insight_card.dart';
 import '../../widgets/price_summary_card.dart';
 import '../paywall_screen.dart';
@@ -37,6 +39,7 @@ class AddEditScreen extends ConsumerStatefulWidget {
 class _AddEditScreenState extends ConsumerState<AddEditScreen> {
   static const String _manualInputSentinel = '__manual_shop_input__';
 
+  final PriceRepository _priceRepository = PriceRepository();
   late final String _placesApiKey;
   late final NumberFormat _yenNumberFormat;
   final _productController = TextEditingController();
@@ -510,11 +513,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
               insight: insightAsync.value ?? AddEditInsight.idle,
               isLoading: isInsightLoading,
               isPro: isPro,
-              onUpgradeTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const PaywallScreen()),
-                );
-              },
+              onUpgradeTap: _handlePaywallTap,
               formatDistance: _formatDistance,
             ),
             const SizedBox(height: 10),
@@ -908,6 +907,22 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
           ),
         );
       },
+    );
+  }
+
+  void _handlePaywallTap() {
+    if (_priceRepository.isGuest) {
+      AppSnackbar.show(
+        context,
+        'ゲストは購入できません。先にログインしてください。',
+        isError: true,
+      );
+      mainScaffoldKey.currentState?.switchToProfileTab();
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PaywallScreen()),
     );
   }
 }

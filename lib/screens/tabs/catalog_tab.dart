@@ -13,6 +13,7 @@ import '../../constants/category_visuals.dart';
 import '../../providers/subscription_provider.dart';
 import '../../screens/paywall_screen.dart';
 import '../../screens/category_detail_screen.dart';
+import '../../widgets/app_snackbar.dart';
 import '../../widgets/price_record_tile.dart';
 import '../../widgets/category_card.dart';
 import '../../services/location_service.dart';
@@ -453,11 +454,7 @@ class _CatalogTabState extends ConsumerState<CatalogTab> {
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const PaywallScreen()),
-                    );
-                  },
+                  onPressed: _handlePaywallTap,
                   child: const Text('詳細を見るにはロック解除'),
                 ),
               ],
@@ -471,6 +468,22 @@ class _CatalogTabState extends ConsumerState<CatalogTab> {
       sliver: SliverList(
         delegate: SliverChildListDelegate(children),
       ),
+    );
+  }
+
+  void _handlePaywallTap() {
+    if (_priceRepository.isGuest) {
+      AppSnackbar.show(
+        context,
+        'ゲストは購入できません。先にログインしてください。',
+        isError: true,
+      );
+      mainScaffoldKey.currentState?.switchToProfileTab();
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PaywallScreen()),
     );
   }
 

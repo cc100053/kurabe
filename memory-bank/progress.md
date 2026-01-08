@@ -6,6 +6,8 @@ Progress snapshot
   - Community search/insight RPCs (`search_community_prices`, `count_nearby_community_prices`, `get_nearby_records_by_category`) with guest/non-Pro gating; personal search by `user_id`.
   - Auth flows: guest/Google/Apple/email, iOS native Sign in with Apple (id token + nonce), guest-to-user merge (identity_already_exists handled), in-app password reset dialog via deep link; login prompt guards community/shopping list.
   - Subscriptions: RevenueCat configured with entitlement `カイログ Pro`, fallback API key, purchase/restore/paywall/Customer Center entry points; `profiles.is_pro` sync for RLS.
+  - Guest paywall taps now route to the Profile tab with a login-required prompt to avoid purchase errors for anonymous users.
+  - RevenueCat purchase flow validated in App Store sandbox testing.
   - Paywall updated to two plans (monthly/annual) with 初回14日無料トライアル copy; added in-app legal documents; smart camera now supports tap-to-focus with a minimal indicator.
   - 統一設定: 周辺比較/最安値判定の期間を14日に統一し、距離も3kmに揃えた。
   - Shopping list: Japanese-only list UI with add/toggle/delete and swipe-to-delete; backend `shopping_list_items` with user-scoped RLS supports guests via anonymous uid.
