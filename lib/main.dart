@@ -486,7 +486,7 @@ class _KurabeAppState extends State<KurabeApp> {
                 if (!mounted) return;
                 setState(() {
                   saving = false;
-                  error = '更新に失敗しました: $e';
+                  error = AuthErrorMapper.message(e);
                 });
               }
             }

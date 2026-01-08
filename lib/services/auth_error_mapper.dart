@@ -6,6 +6,12 @@ class AuthErrorMapper {
         (msg.contains('6') || msg.contains('least'))) {
       return 'パスワードは6文字以上で入力してください。';
     }
+    if (msg.contains('same_password') ||
+        (msg.contains('password') &&
+            msg.contains('different') &&
+            msg.contains('old'))) {
+      return '新しいパスワードは、現在のパスワードと異なるものを設定してください。';
+    }
     if (msg.contains('weak') && msg.contains('password')) {
       return 'パスワードが弱すぎます。より強力なパスワードを設定してください。';
     }

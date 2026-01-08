@@ -111,7 +111,7 @@ class _SmartCameraScreenState extends State<SmartCameraScreen>
         _error = null;
       });
     } catch (e) {
-      setState(() => _error = 'カメラの初期化に失敗しました: $e');
+      setState(() => _error = 'カメラの初期化に失敗しました。設定を確認してください。');
     }
   }
 
@@ -128,7 +128,7 @@ class _SmartCameraScreenState extends State<SmartCameraScreen>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('撮影に失敗しました: $e')),
+        SnackBar(content: Text('撮影に失敗しました。もう一度お試しください。')),
       );
     } finally {
       if (mounted) {

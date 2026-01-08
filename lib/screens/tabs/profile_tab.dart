@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -27,6 +28,7 @@ class ProfileTab extends ConsumerStatefulWidget {
 }
 
 class ProfileTabState extends ConsumerState<ProfileTab> {
+  static const double _avatarPreviewSize = 180;
   final PriceRepository _priceRepository = PriceRepository();
   StreamSubscription<AuthState>? _authStateSub;
   OAuthProvider? _lastProvider;
@@ -1614,26 +1616,26 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
     const avatarBucket = 'avatars';
-    final picker = ImagePicker();
-    final picked =
-        await picker.pickImage(source: ImageSource.gallery, maxWidth: 800);
-    if (picked == null) return;
-    final originalBytes = await picked.readAsBytes();
-    if (originalBytes.lengthInBytes > 15 * 1024 * 1024) {
-      _showStatusSnackBar('画像サイズは15MB以内にしてください。', isError: true);
-      return;
+    Uint8List? originalBytes;
+    final avatarUrl = user.userMetadata?['avatar_url'] as String?;
+    if (avatarUrl != null) {
+      setState(() => _isUpdatingProfile = true);
+      originalBytes = await _fetchAvatarBytes(avatarUrl);
+      if (mounted) setState(() => _isUpdatingProfile = false);
     }
+    originalBytes ??= await _pickAvatarBytes();
+    if (originalBytes == null) return;
     final adjustedBytes = await _showAvatarAdjustDialog(originalBytes);
     if (adjustedBytes == null) return;
     setState(() => _isUpdatingProfile = true);
     try {
       final path =
-          'avatars/${user.id}_${DateTime.now().millisecondsSinceEpoch}${picked.name.contains('.') ? picked.name.substring(picked.name.lastIndexOf('.')) : '.jpg'}';
+          'avatars/${user.id}_${DateTime.now().millisecondsSinceEpoch}.png';
       await Supabase.instance.client.storage.from(avatarBucket).uploadBinary(
             path,
             adjustedBytes,
             fileOptions:
-                const FileOptions(upsert: true, contentType: 'image/jpeg'),
+                const FileOptions(upsert: true, contentType: 'image/png'),
           );
       final publicUrl = Supabase.instance.client.storage
           .from(avatarBucket)
@@ -1651,6 +1653,29 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
           _isUpdatingProfile = false;
         });
       }
+    }
+  }
+
+  Future<Uint8List?> _pickAvatarBytes() async {
+    final picker = ImagePicker();
+    final picked =
+        await picker.pickImage(source: ImageSource.gallery, maxWidth: 800);
+    if (picked == null) return null;
+    final bytes = await picked.readAsBytes();
+    if (bytes.lengthInBytes > 15 * 1024 * 1024) {
+      _showStatusSnackBar('画像サイズは15MB以内にしてください。', isError: true);
+      return null;
+    }
+    return bytes;
+  }
+
+  Future<Uint8List?> _fetchAvatarBytes(String url) async {
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode != 200) return null;
+      return response.bodyBytes;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -1702,6 +1727,7 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
   Future<Uint8List?> _showAvatarAdjustDialog(Uint8List bytes) async {
     double scale = 1.0;
     Offset offset = Offset.zero;
+    Uint8List currentBytes = bytes;
     return showDialog<Uint8List>(
       context: context,
       builder: (context) {
@@ -1717,14 +1743,14 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
                         setState(() => offset += details.delta),
                     child: ClipOval(
                       child: SizedBox(
-                        width: 180,
-                        height: 180,
+                        width: _avatarPreviewSize,
+                        height: _avatarPreviewSize,
                         child: Transform.translate(
                           offset: offset,
                           child: Transform.scale(
                             scale: scale,
                             child: Image.memory(
-                              bytes,
+                              currentBytes,
                               fit: BoxFit.cover,
                             ),
                           ),
@@ -1732,19 +1758,93 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Text('ズーム'),
-                      Expanded(
-                        child: Slider(
-                          value: scale,
-                          min: 1.0,
-                          max: 3.0,
-                          onChanged: (v) => setState(() => scale = v),
-                        ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: () async {
+                      final pickedBytes = await _pickAvatarBytes();
+                      if (pickedBytes == null) return;
+                      setState(() {
+                        currentBytes = pickedBytes;
+                        scale = 1.0;
+                        offset = Offset.zero;
+                      });
+                    },
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('写真を変更'),
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'ズーム',
+                      style: TextStyle(
+                        color: KurabeColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
                       ),
-                    ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: KurabeColors.surfaceElevated,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: KurabeColors.border,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(10),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.zoom_out,
+                          color: KurabeColors.textSecondary,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              trackHeight: 4,
+                              activeTrackColor: KurabeColors.primary,
+                              inactiveTrackColor:
+                                  KurabeColors.primary.withAlpha(38),
+                              thumbColor: KurabeColors.primary,
+                              overlayColor:
+                                  KurabeColors.primary.withAlpha(26),
+                              thumbShape: const RoundSliderThumbShape(
+                                enabledThumbRadius: 10,
+                              ),
+                              overlayShape: const RoundSliderOverlayShape(
+                                overlayRadius: 16,
+                              ),
+                            ),
+                            child: Slider(
+                              value: scale,
+                              min: 1.0,
+                              max: 3.0,
+                              onChanged: (v) => setState(() => scale = v),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.zoom_in,
+                          color: KurabeColors.primary,
+                          size: 18,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -1756,7 +1856,7 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
                 ElevatedButton(
                   onPressed: () async {
                     final cropped =
-                        await _cropCenteredSquare(bytes, scale, offset);
+                        await _cropCenteredSquare(currentBytes, scale, offset);
                     if (!context.mounted) return;
                     Navigator.of(context).pop(cropped);
                   },
@@ -1781,7 +1881,13 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
     final paint = Paint();
     final dstSize = size.toDouble();
 
-    canvas.translate(dstSize / 2 + offset.dx, dstSize / 2 + offset.dy);
+    final offsetScale = dstSize / _avatarPreviewSize;
+    final scaledOffset =
+        Offset(offset.dx * offsetScale, offset.dy * offsetScale);
+    canvas.translate(
+      dstSize / 2 + scaledOffset.dx,
+      dstSize / 2 + scaledOffset.dy,
+    );
     canvas.scale(scale);
     canvas.translate(-image.width / 2, -image.height / 2);
     canvas.drawImage(image, Offset.zero, paint);

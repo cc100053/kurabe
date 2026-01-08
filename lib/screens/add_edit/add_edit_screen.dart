@@ -262,7 +262,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('画像の処理に失敗しました: $e')));
+      ).showSnackBar(const SnackBar(content: Text('画像の処理に失敗しました。もう一度お試しください。')));
     }
   }
 
@@ -704,7 +704,7 @@ class _AddEditScreenState extends ConsumerState<AddEditScreen> {
                           _hideSavingDialog();
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('記録の保存に失敗しました: $e'),
+                              content: Text('記録の保存に失敗しました。通信環境を確認してください。'),
                             ),
                           );
                         }
