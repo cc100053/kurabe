@@ -9,6 +9,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'data/config/app_config.dart';
 import 'screens/main_scaffold.dart';
 import 'screens/welcome_screen.dart';
+import 'services/auth_error_mapper.dart';
 
 final GlobalKey<MainScaffoldState> mainScaffoldKey =
     GlobalKey<MainScaffoldState>();

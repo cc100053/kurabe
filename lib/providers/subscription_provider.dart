@@ -125,6 +125,13 @@ class SubscriptionController extends StateNotifier<SubscriptionState> {
 
   Future<bool> purchasePlan(String packageId) async {
     state = state.copyWith(isLoading: true, error: null);
+    if (!_canPurchase()) {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'メール認証後に購入できます。',
+      );
+      return false;
+    }
     try {
       final isPro = await _service.purchasePackage(packageId);
       state = state.copyWith(isPro: isPro, isLoading: false, error: null);
@@ -193,6 +200,35 @@ class SubscriptionController extends StateNotifier<SubscriptionState> {
       );
       return false;
     }
+  }
+
+  bool _canPurchase() {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null || user.isAnonymous) return false;
+    final metaValue = user.userMetadata?['email_verified'];
+    final verifiedAt = user.userMetadata?['email_verified_at'];
+    if (metaValue is bool && metaValue && verifiedAt != null) return true;
+    final providers = user.appMetadata['providers'];
+    if (providers is List) {
+      final lower = providers
+          .map((e) => e.toString().toLowerCase())
+          .where((value) => value.isNotEmpty)
+          .toList();
+      if (lower.any((value) => value != 'email' && value != 'anonymous')) {
+        return true;
+      }
+      if (lower.isNotEmpty) {
+        return false;
+      }
+    }
+    final provider = user.appMetadata['provider']?.toString().toLowerCase();
+    if (provider != null &&
+        provider.isNotEmpty &&
+        provider != 'email' &&
+        provider != 'anonymous') {
+      return true;
+    }
+    return false;
   }
 
   String _friendlyError(Object error) {

@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../main.dart';
 import '../constants/auth.dart';
@@ -458,11 +457,35 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         final response = await auth.signUp(
           email: email,
           password: password,
+          data: {'email_verified': false},
         );
-        if (response.session != null) {
-          return 'アカウントを作成しました。';
+        if (auth.currentSession == null && response.session == null) {
+          try {
+            final signIn = await auth.signInWithPassword(
+              email: email,
+              password: password,
+            );
+            if (signIn.session == null) {
+              return 'ログインに失敗しました。';
+            }
+          } on AuthException catch (e) {
+            if (_isAlreadyRegisteredError(e)) {
+              setState(() {
+                _isSignUpMode = false;
+                _emailController.text = email;
+              });
+              return '既に登録済みです。ログインしてください。';
+            }
+            if (_isEmailConfirmationError(e)) {
+              await _sendVerificationEmailIfNeeded(email);
+              return '確認メールを送信しました。メールを確認してください。';
+            }
+            rethrow;
+          }
         }
-        return '確認メールを送信しました。メールを確認してください。';
+        await _ensureEmailVerificationFlag();
+        await _sendVerificationEmailIfNeeded(email);
+        return 'アカウントを作成しました。確認メールを送信しました。';
       } on AuthException catch (e) {
         final msg = e.message.toLowerCase();
         final alreadyRegistered =
@@ -478,6 +501,48 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         rethrow;
       }
     });
+  }
+
+  Future<void> _ensureEmailVerificationFlag() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null || user.isAnonymous) return;
+    final metaValue = user.userMetadata?['email_verified'];
+    final verifiedAt = user.userMetadata?['email_verified_at'];
+    if (metaValue is bool && (metaValue == false || verifiedAt != null)) return;
+    try {
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(data: {'email_verified': false}),
+      );
+    } catch (_) {
+      // Best-effort to mark as unverified.
+    }
+  }
+
+  bool _isEmailConfirmationError(AuthException error) {
+    final message = error.message.toLowerCase();
+    return message.contains('confirm') || message.contains('verified');
+  }
+
+  bool _isAlreadyRegisteredError(AuthException error) {
+    final message = error.message.toLowerCase();
+    return (message.contains('already') &&
+            (message.contains('registered') || message.contains('exists'))) ||
+        message.contains('already registered') ||
+        message.contains('user already') ||
+        message.contains('email already');
+  }
+
+  Future<void> _sendVerificationEmailIfNeeded(String email) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    final metaValue = user?.userMetadata?['email_verified'];
+    final verifiedAt = user?.userMetadata?['email_verified_at'];
+    if (metaValue is bool && metaValue && verifiedAt != null) return;
+    try {
+      await Supabase.instance.client.functions
+          .invoke('send-email-verification');
+    } catch (_) {
+      // Ignore email resend failures to avoid blocking sign-up.
+    }
   }
 
   Future<void> _loginWithEmail(String email, String password) async {

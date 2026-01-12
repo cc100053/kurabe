@@ -9,7 +9,6 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/repositories/price_repository.dart';
 import '../../main.dart';
@@ -35,9 +34,11 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
   List<Map<String, dynamic>>? _pendingGuestRecords;
   List<Map<String, dynamic>>? _pendingGuestShoppingItems;
   bool _isLoading = false;
+  bool _isResendingVerification = false;
   late Future<Map<String, dynamic>> _statsFuture;
   bool _isUpdatingProfile = false;
   bool _handledLinkError = false;
+  User? _currentUser;
 
   /// Converts auth exceptions to user-friendly Japanese messages
   String _friendlyErrorMessage(dynamic error) {
@@ -53,6 +54,7 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
   @override
   void initState() {
     super.initState();
+    _currentUser = Supabase.instance.client.auth.currentUser;
     _statsFuture = _fetchProfileStats();
     _listenAuthErrors();
   }
@@ -93,6 +95,11 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
     _authStateSub?.cancel();
     _authStateSub = Supabase.instance.client.auth.onAuthStateChange.listen(
       (state) async {
+        if (mounted) {
+          setState(() {
+            _currentUser = state.session?.user;
+          });
+        }
         if (state.event == AuthChangeEvent.signedIn &&
             ((_pendingGuestRecords != null &&
                     _pendingGuestRecords!.isNotEmpty) ||
@@ -246,6 +253,7 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
   }
 
   Future<void> refreshStats() async {
+    await _refreshCurrentUser();
     setState(() {
       _statsFuture = _fetchProfileStats();
     });
@@ -254,10 +262,11 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
 
   @override
   Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
+    final user = _currentUser ?? Supabase.instance.client.auth.currentUser;
     final isGuest = _priceRepository.isGuest;
     final emailText = user?.email ?? 'ゲストユーザー';
     final isPro = ref.watch(subscriptionProvider).isPro;
+    final isEmailVerified = !_priceRepository.isGuest && _isEmailVerified(user);
 
     return Scaffold(
       backgroundColor: KurabeColors.background,
@@ -278,7 +287,11 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
 
             // Settings menu
             SliverToBoxAdapter(
-              child: _buildSettingsSection(isGuest, isPro),
+              child: _buildSettingsSection(
+                isGuest,
+                isPro,
+                isEmailVerified,
+              ),
             ),
 
             // Bottom spacing
@@ -287,6 +300,29 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
         ),
       ),
     );
+  }
+
+  Future<void> _refreshCurrentUser() async {
+    final auth = Supabase.instance.client.auth;
+    try {
+      final refreshed = await auth.refreshSession();
+      if (!mounted) return;
+      setState(() {
+        _currentUser = refreshed.user ?? auth.currentUser;
+      });
+    } catch (_) {
+      // Ignore refresh failures to avoid blocking pull-to-refresh.
+    }
+
+    try {
+      final response = await auth.getUser();
+      if (!mounted) return;
+      setState(() {
+        _currentUser = response.user ?? auth.currentUser;
+      });
+    } catch (_) {
+      // Ignore fetch failures to avoid blocking pull-to-refresh.
+    }
   }
 
   Widget _buildHeader(User? user, bool isGuest, bool isPro, String emailText) {
@@ -390,6 +426,39 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
         ),
       ),
     );
+  }
+
+  bool _isEmailVerified(User? user) {
+    if (user == null || user.isAnonymous) return false;
+    if (_hasCustomEmailVerification(user)) return true;
+    final providers = user.appMetadata['providers'];
+    if (providers is List) {
+      final lower = providers
+          .map((e) => e.toString().toLowerCase())
+          .where((value) => value.isNotEmpty)
+          .toList();
+      if (lower.any((value) => value != 'email' && value != 'anonymous')) {
+        return true;
+      }
+      if (lower.isNotEmpty) {
+        return false;
+      }
+    }
+    final provider = user.appMetadata['provider']?.toString().toLowerCase();
+    if (provider != null &&
+        provider.isNotEmpty &&
+        provider != 'email' &&
+        provider != 'anonymous') {
+      return true;
+    }
+    return false;
+  }
+
+  bool _hasCustomEmailVerification(User user) {
+    final metaValue = user.userMetadata?['email_verified'];
+    if (metaValue is! bool || !metaValue) return false;
+    final verifiedAt = user.userMetadata?['email_verified_at'];
+    return verifiedAt != null;
   }
 
   Widget _buildProBadge() {
@@ -682,7 +751,11 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
     );
   }
 
-  Widget _buildSettingsSection(bool isGuest, bool isPro) {
+  Widget _buildSettingsSection(
+    bool isGuest,
+    bool isPro,
+    bool isEmailVerified,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       child: Column(
@@ -701,6 +774,52 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
               ),
             ),
           ),
+
+          if (!isGuest && !isEmailVerified) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: KurabeColors.warning.withAlpha(26),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: KurabeColors.warning.withAlpha(77),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    PhosphorIcons.warning(PhosphorIconsStyle.fill),
+                    size: 18,
+                    color: KurabeColors.warning,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'メール未認証',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: KurabeColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed:
+                        _isResendingVerification ? null : _resendVerification,
+                    child: _isResendingVerification
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('再送信'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
 
           // Settings tiles
           Container(
@@ -1089,17 +1208,43 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
     if (email.isEmpty || password.isEmpty) return;
     setState(() => _isLoading = true);
     try {
-      await Supabase.instance.client.auth.signUp(
+      final auth = Supabase.instance.client.auth;
+      await _captureGuestRecords();
+      final response = await auth.signUp(
         email: email,
         password: password,
+        data: {'email_verified': false},
       );
+      if (auth.currentSession == null && response.session == null) {
+        try {
+          await auth.signInWithPassword(
+            email: email,
+            password: password,
+          );
+        } on AuthException catch (e) {
+          if (_isInvalidLoginCredentials(e)) {
+            await _showExistingEmailLoginDialog(prefillEmail: email);
+            if (!mounted) return;
+            _showStatusSnackBar('このメールは既に登録されています。ログインから接続してください。',
+                isError: true);
+            return;
+          }
+          if (_isEmailConfirmationError(e)) {
+            await _sendVerificationEmailIfNeeded(email);
+            if (!mounted) return;
+            _showStatusSnackBar('確認メールを送信しました。メールを確認してください。');
+            return;
+          }
+          rethrow;
+        }
+      }
+      await _ensureEmailVerificationFlag();
+      await _migrateGuestRecords();
+      await _sendVerificationEmailIfNeeded(email);
       if (!mounted) return;
-      _showStatusSnackBar('確認メールを送信しました。受信箱を確認してください。');
+      _showStatusSnackBar('アカウントを作成しました。確認メールを送信しました。');
     } on AuthException catch (e) {
-      final msgLower = e.message.toLowerCase();
-      final alreadyRegistered =
-          msgLower.contains('already') && msgLower.contains('registered');
-      if (alreadyRegistered) {
+      if (_isAlreadyRegisteredError(e)) {
         if (mounted) {
           _showStatusSnackBar('このメールは既に登録されています。ログインから接続してください。',
               isError: true);
@@ -1117,6 +1262,75 @@ class ProfileTabState extends ConsumerState<ProfileTab> {
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _ensureEmailVerificationFlag() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null || user.isAnonymous) return;
+    final metaValue = user.userMetadata?['email_verified'];
+    final verifiedAt = user.userMetadata?['email_verified_at'];
+    if (metaValue is bool && (metaValue == false || verifiedAt != null)) return;
+    try {
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(data: {'email_verified': false}),
+      );
+    } catch (_) {
+      // Best-effort to mark as unverified.
+    }
+  }
+
+  bool _isEmailConfirmationError(AuthException error) {
+    final message = error.message.toLowerCase();
+    return message.contains('confirm') || message.contains('verified');
+  }
+
+  bool _isAlreadyRegisteredError(AuthException error) {
+    final message = error.message.toLowerCase();
+    return (message.contains('already') &&
+            (message.contains('registered') || message.contains('exists'))) ||
+        message.contains('already registered') ||
+        message.contains('user already') ||
+        message.contains('email already');
+  }
+
+  bool _isInvalidLoginCredentials(AuthException error) {
+    final message = error.message.toLowerCase();
+    return message.contains('invalid login') ||
+        message.contains('invalid credentials') ||
+        message.contains('invalid email') ||
+        message.contains('invalid password');
+  }
+
+  Future<void> _sendVerificationEmailIfNeeded(String email) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    final metaValue = user?.userMetadata?['email_verified'];
+    final verifiedAt = user?.userMetadata?['email_verified_at'];
+    if (metaValue is bool && metaValue && verifiedAt != null) return;
+    try {
+      await Supabase.instance.client.functions
+          .invoke('send-email-verification');
+    } catch (_) {
+      // Ignore resend errors to keep the flow non-blocking.
+    }
+  }
+
+  Future<void> _resendVerification() async {
+    if (_isResendingVerification) return;
+    setState(() => _isResendingVerification = true);
+    try {
+      await Supabase.instance.client.functions
+          .invoke('send-email-verification');
+      if (!mounted) return;
+      _showStatusSnackBar('確認メールを再送信しました。');
+    } catch (e) {
+      if (!mounted) return;
+      _showStatusSnackBar('再送信に失敗しました。${_friendlyErrorMessage(e)}',
+          isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isResendingVerification = false);
       }
     }
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../main.dart';
 import '../providers/subscription_provider.dart';
@@ -54,8 +55,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
 
   @override
   Widget build(BuildContext context) {
+    final user = Supabase.instance.client.auth.currentUser;
+    final canPurchase = _canPurchase(user);
     final subState = ref.watch(subscriptionProvider);
     final notifier = ref.read(subscriptionProvider.notifier);
+    final showVerificationNotice = !canPurchase && !subState.isPro;
 
     return Scaffold(
       body: Container(
@@ -93,8 +97,13 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
 
                       const SizedBox(height: 24),
 
+                      if (showVerificationNotice) ...[
+                        _buildVerificationNotice(),
+                        const SizedBox(height: 12),
+                      ],
+
                       // CTA Button
-                      _buildCTAButton(subState, notifier),
+                      _buildCTAButton(subState, notifier, canPurchase),
 
                       const SizedBox(height: 16),
 
@@ -684,32 +693,38 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
   Widget _buildCTAButton(
     SubscriptionState subState,
     SubscriptionController notifier,
+    bool canPurchase,
   ) {
     final packageId = _selectedPlanIndex >= 0 &&
             _selectedPlanIndex < _packageIds.length
         ? _packageIds[_selectedPlanIndex]
         : _packageIds.first;
+    final isDisabled = subState.isLoading || subState.isPro || !canPurchase;
     return Container(
       width: double.infinity,
       height: 56,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            KurabeColors.accent,
-            KurabeColors.accent.withAlpha(220),
-          ],
+          colors: isDisabled
+              ? [Colors.grey.shade300, Colors.grey.shade300]
+              : [
+                  KurabeColors.accent,
+                  KurabeColors.accent.withAlpha(220),
+                ],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: KurabeColors.accent.withAlpha(60),
+            color: isDisabled
+                ? Colors.black.withAlpha(10)
+                : KurabeColors.accent.withAlpha(60),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
         ],
       ),
       child: ElevatedButton(
-        onPressed: subState.isLoading || subState.isPro
+        onPressed: isDisabled
             ? null
             : () => notifier.purchasePlan(packageId),
         style: ElevatedButton.styleFrom(
@@ -741,7 +756,11 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    subState.isPro ? 'Pro 有効中' : 'Proを始める',
+                    subState.isPro
+                        ? 'Pro 有効中'
+                        : canPurchase
+                            ? 'Proを始める'
+                            : 'メール認証が必要',
                     style: const TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w800,
@@ -785,6 +804,67 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen>
         ),
       ],
     );
+  }
+
+  Widget _buildVerificationNotice() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: KurabeColors.warning.withAlpha(26),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: KurabeColors.warning.withAlpha(77),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            PhosphorIcons.warning(PhosphorIconsStyle.fill),
+            size: 18,
+            color: KurabeColors.warning,
+          ),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'メール認証後に購入できます。',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: KurabeColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _canPurchase(User? user) {
+    if (user == null || user.isAnonymous) return false;
+    final metaValue = user.userMetadata?['email_verified'];
+    final verifiedAt = user.userMetadata?['email_verified_at'];
+    if (metaValue is bool && metaValue && verifiedAt != null) return true;
+    final providers = user.appMetadata['providers'];
+    if (providers is List) {
+      final lower = providers
+          .map((e) => e.toString().toLowerCase())
+          .where((value) => value.isNotEmpty)
+          .toList();
+      if (lower.any((value) => value != 'email' && value != 'anonymous')) {
+        return true;
+      }
+      if (lower.isNotEmpty) {
+        return false;
+      }
+    }
+    final provider = user.appMetadata['provider']?.toString().toLowerCase();
+    if (provider != null &&
+        provider.isNotEmpty &&
+        provider != 'email' &&
+        provider != 'anonymous') {
+      return true;
+    }
+    return false;
   }
 
   Widget _buildLinkButton(String text, VoidCallback onTap) {

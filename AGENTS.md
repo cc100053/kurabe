@@ -1,11 +1,10 @@
 # Repository Guidelines
 
 ## Important:
-# Read memory-bank/architecture.md (complete database structure) before writing any code
-# Read memory-bank/app-design-document.md before writing any code
-# Read memory-bank/schema-diagrams.md for DB schema/RLS context before writing any code
-# Update memory-bank/progress.md after completing a major feature or milestone
-# Update memory-bank/schema-diagrams.md whenever DB/schema changes
+# Read all md inside memory-bank before writing any code
+# Update all md inside memory-bank after completing any task if needed.
+# run flutter analyze after completing any task.
+# run flutter test after completing any task.
 
 ## Project Structure & Module Organization
 - App source lives in `lib/` with screens, widgets, services, and providers (Riverpod) split by concern. Platform code is under `android/`, `ios/`.
@@ -37,5 +36,5 @@
 - Android paywall requires `MainActivity` extending `FlutterFragmentActivity` (already in `android/app/src/main/kotlin/com/cc100053/kurabe/MainActivity.kt`).
 
 ## Agent-Specific Notes
-- When wiring purchases, package IDs currently expected by the custom paywall are `monthly`, `quarterly`, `annual`; keep them in sync with RevenueCat offerings.
+- When wiring purchases, package IDs currently expected by the custom paywall are `monthly`, `annual`; keep them in sync with RevenueCat offerings.
 - Location/RPC failures can surface as UI fallbacks; check `lib/services/supabase_service.dart` logging before changing UI error states.***

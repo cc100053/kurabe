@@ -5,6 +5,8 @@ Progress snapshot
   - Add/Edit flow with smart camera, Gemini 1.5 parsing (product/price/discount/category), tax rate inference, two-way tax-exclusive/tax-inclusive price inputs (¥ + thousands formatting; debounced cross-field updates), unit/taxed total display, best-price insight via `get_nearby_cheapest`, and Google Places nearby/autocomplete for shops.
   - Community search/insight RPCs (`search_community_prices`, `count_nearby_community_prices`, `get_nearby_records_by_category`) with guest/non-Pro gating; personal search by `user_id`.
   - Auth flows: guest/Google/Apple/email, iOS native Sign in with Apple (id token + nonce), guest-to-user merge (identity_already_exists handled), in-app password reset dialog via deep link; login prompt guards community/shopping list.
+  - Lazy registration: email sign-up auto logs in, sends verification email in background, and shows a Profile settings warning when the email is unverified.
+  - Custom email verification: `user_metadata.email_verified` flag + edge functions to send verification mail and mark verified; unverified email users are blocked from Pro purchase.
   - Subscriptions: RevenueCat configured with entitlement `カイログ Pro`, fallback API key, purchase/restore/paywall/Customer Center entry points; `profiles.is_pro` sync for RLS.
   - Guest paywall taps now route to the Profile tab with a login-required prompt to avoid purchase errors for anonymous users.
   - RevenueCat purchase flow validated in App Store sandbox testing.
@@ -26,6 +28,10 @@ Progress snapshot
   - Keep RevenueCat package identifiers (`monthly`, `annual`) aligned with dashboard offerings; run purchase/restore/paywall regression.
   - Apple Sign-In ops: Supabase Apple provider must include Services ID + iOS bundle ID in Client IDs, and the client secret JWT needs rotation (max 180 days).
 - Run `flutter analyze` and `flutter test` before release; perform end-to-end capture → save → community search → paywall flows after backend changes.
+- Current block: email verification flow still not sending emails / not showing "メール未認証" warning consistently after signup; Edge Function logs appear empty. Need to confirm function deployment, secrets, and client invocation path.
+- Fix in progress: treat custom verification as `email_verified` + `email_verified_at` (not just `email_verified`) so new email accounts don't get flagged as verified before our flow completes.
+- Done: `verify-email` Edge Function disables JWT verification (`verify_jwt=false`) so email links open without auth.
+- Done: Profile pull-to-refresh now refreshes session + user to clear the "メール未認証" badge immediately after verification.
 
 Step 1 status
 - Completed: centralized AppConfig injection (env keys for Supabase/RevenueCat/Gemini/Places), price history migrated to Riverpod provider, entry wiring updated to use ProviderScope overrides.
